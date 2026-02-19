@@ -1,0 +1,16 @@
+﻿language_version: "0.1"
+metadata:
+  id: unknown-exercise
+  name: Unknown Exercise
+sessions:
+  - id: day-1
+    name: Test
+    day: 1
+    exercises:
+      - exercise: ""
+        sets:
+          - count: 3
+            reps: 5
+            intensity:
+              type: percent_1rm
+              value: 70

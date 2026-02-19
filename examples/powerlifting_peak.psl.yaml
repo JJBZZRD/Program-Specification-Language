@@ -1,0 +1,38 @@
+﻿language_version: "0.1"
+metadata:
+  id: powerlifting-peak
+  name: Powerlifting Peak
+  description: Peaking block with top set and back-off structure.
+sessions:
+  - id: squat-day
+    name: Squat Focus
+    day: 1
+    exercises:
+      - exercise: Competition Squat
+        sets:
+          - count: 1
+            reps: 1
+            intensity:
+              type: rpe
+              value: 8
+          - count: 3
+            reps: 3
+            intensity:
+              type: percent_1rm
+              value: 82.5
+  - id: bench-day
+    name: Bench Focus
+    day: 3
+    exercises:
+      - exercise: Competition Bench Press
+        sets:
+          - count: 1
+            reps: 1
+            intensity:
+              type: rpe
+              value: 8.5
+          - count: 4
+            reps: 2
+            intensity:
+              type: percent_1rm
+              value: 85

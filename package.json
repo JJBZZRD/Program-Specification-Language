@@ -1,0 +1,37 @@
+﻿{
+  "name": "program-specification-language",
+  "version": "0.1.0",
+  "description": "Declarative DSL for structured resistance training programs.",
+  "license": "Apache-2.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "cli:build": "tsc -p tsconfig.json --outDir dist",
+    "psl": "node dist/cli/src/main.js",
+    "psl:dev": "npm run cli:build && node dist/cli/src/main.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "eslint .",
+    "format": "prettier --check .",
+    "test": "npm run test:compile && node .tmp/testdist/tests/run.js",
+    "test:compile": "tsc -p tsconfig.json --outDir .tmp/testdist",
+    "test:vitest": "vitest run",
+    "test:vitest:watch": "vitest",
+    "test:watch": "npm run test:vitest:watch"
+  },
+  "dependencies": {
+    "yaml": "^2.8.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.5",
+    "eslint": "^9.20.1",
+    "prettier": "^3.5.1",
+    "typescript": "^5.8.2",
+    "vitest": "^3.0.5"
+  }
+}

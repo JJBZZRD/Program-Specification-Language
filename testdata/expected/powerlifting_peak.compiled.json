@@ -1,0 +1,134 @@
+{
+  "language_version": "0.1",
+  "source_hash": "0d9a6f76ea08afd8580f19e05333257d10e50ca79547a85de416b8d57158212f",
+  "metadata": {
+    "id": "powerlifting-peak",
+    "name": "Powerlifting Peak",
+    "description": "Peaking block with top set and back-off structure."
+  },
+  "sessions": [
+    {
+      "id": "squat-day",
+      "name": "Squat Focus",
+      "day": 1,
+      "exercises": [
+        {
+          "exercise": "Competition Squat",
+          "sets": [
+            {
+              "index": 1,
+              "reps": {
+                "min": 1,
+                "max": 1
+              },
+              "intensity": {
+                "type": "rpe",
+                "value": 8
+              }
+            },
+            {
+              "index": 2,
+              "reps": {
+                "min": 3,
+                "max": 3
+              },
+              "intensity": {
+                "type": "percent_1rm",
+                "value": 82.5
+              }
+            },
+            {
+              "index": 3,
+              "reps": {
+                "min": 3,
+                "max": 3
+              },
+              "intensity": {
+                "type": "percent_1rm",
+                "value": 82.5
+              }
+            },
+            {
+              "index": 4,
+              "reps": {
+                "min": 3,
+                "max": 3
+              },
+              "intensity": {
+                "type": "percent_1rm",
+                "value": 82.5
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "bench-day",
+      "name": "Bench Focus",
+      "day": 3,
+      "exercises": [
+        {
+          "exercise": "Competition Bench Press",
+          "sets": [
+            {
+              "index": 1,
+              "reps": {
+                "min": 1,
+                "max": 1
+              },
+              "intensity": {
+                "type": "rpe",
+                "value": 8.5
+              }
+            },
+            {
+              "index": 2,
+              "reps": {
+                "min": 2,
+                "max": 2
+              },
+              "intensity": {
+                "type": "percent_1rm",
+                "value": 85
+              }
+            },
+            {
+              "index": 3,
+              "reps": {
+                "min": 2,
+                "max": 2
+              },
+              "intensity": {
+                "type": "percent_1rm",
+                "value": 85
+              }
+            },
+            {
+              "index": 4,
+              "reps": {
+                "min": 2,
+                "max": 2
+              },
+              "intensity": {
+                "type": "percent_1rm",
+                "value": 85
+              }
+            },
+            {
+              "index": 5,
+              "reps": {
+                "min": 2,
+                "max": 2
+              },
+              "intensity": {
+                "type": "percent_1rm",
+                "value": 85
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

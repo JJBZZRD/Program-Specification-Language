@@ -1,0 +1,24 @@
+﻿language_version: "0.1"
+metadata:
+  id: edge-cases
+  name: Edge Cases
+sessions:
+  - id: mixed-day
+    name: Mixed Day
+    day: 1
+    exercises:
+      - exercise: Tempo Squat
+        sets:
+          - count: 2
+            reps:
+              min: 3
+              max: 5
+            note: tempo 3-1-1
+      - exercise: Pause Bench Press
+        sets:
+          - count: 5
+            reps: 3
+            intensity:
+              type: percent_1rm
+              value: 70
+            note: 1 second pause

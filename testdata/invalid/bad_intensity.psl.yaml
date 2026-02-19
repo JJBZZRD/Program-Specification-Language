@@ -1,0 +1,16 @@
+﻿language_version: "0.1"
+metadata:
+  id: bad-intensity
+  name: Bad Intensity
+sessions:
+  - id: day-1
+    name: Test
+    day: 1
+    exercises:
+      - exercise: Back Squat
+        sets:
+          - count: 3
+            reps: 5
+            intensity:
+              type: rpe
+              value: 12

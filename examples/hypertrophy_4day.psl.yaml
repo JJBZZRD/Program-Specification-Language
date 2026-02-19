@@ -1,0 +1,35 @@
+﻿language_version: "0.1"
+metadata:
+  id: hypertrophy-4day
+  name: Hypertrophy 4 Day
+  description: Upper/lower split with moderate volume.
+sessions:
+  - id: day-1
+    name: Upper A
+    day: 1
+    exercises:
+      - exercise: Barbell Bench Press
+        sets:
+          - count: 4
+            reps: 8
+            intensity:
+              type: rir
+              value: 2
+      - exercise: Chest Supported Row
+        sets:
+          - count: 4
+            reps: 10
+            intensity:
+              type: rir
+              value: 2
+  - id: day-2
+    name: Lower A
+    day: 2
+    exercises:
+      - exercise: Back Squat
+        sets:
+          - count: 4
+            reps: 6
+            intensity:
+              type: percent_1rm
+              value: 75

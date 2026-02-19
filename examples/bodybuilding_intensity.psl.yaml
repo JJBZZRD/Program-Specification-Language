@@ -1,0 +1,25 @@
+﻿language_version: "0.1"
+metadata:
+  id: bodybuilding-intensity
+  name: Bodybuilding Intensity
+sessions:
+  - id: push
+    name: Push Session
+    day: 1
+    exercises:
+      - exercise: Incline Dumbbell Press
+        sets:
+          - count: 4
+            reps:
+              min: 8
+              max: 12
+            intensity:
+              type: rir
+              value: 1
+      - exercise: Lateral Raise
+        sets:
+          - count: 4
+            reps: 15
+            intensity:
+              type: rir
+              value: 2

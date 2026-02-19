@@ -1,0 +1,172 @@
+{
+  "language_version": "0.1",
+  "source_hash": "05ffceac2dc883c9f88c4446a8e5383df5ae322a31b97056b4c8d8fcd26d9fe2",
+  "metadata": {
+    "id": "hypertrophy-4day",
+    "name": "Hypertrophy 4 Day",
+    "description": "Upper/lower split with moderate volume."
+  },
+  "sessions": [
+    {
+      "id": "day-1",
+      "name": "Upper A",
+      "day": 1,
+      "exercises": [
+        {
+          "exercise": "Barbell Bench Press",
+          "sets": [
+            {
+              "index": 1,
+              "reps": {
+                "min": 8,
+                "max": 8
+              },
+              "intensity": {
+                "type": "rir",
+                "value": 2
+              }
+            },
+            {
+              "index": 2,
+              "reps": {
+                "min": 8,
+                "max": 8
+              },
+              "intensity": {
+                "type": "rir",
+                "value": 2
+              }
+            },
+            {
+              "index": 3,
+              "reps": {
+                "min": 8,
+                "max": 8
+              },
+              "intensity": {
+                "type": "rir",
+                "value": 2
+              }
+            },
+            {
+              "index": 4,
+              "reps": {
+                "min": 8,
+                "max": 8
+              },
+              "intensity": {
+                "type": "rir",
+                "value": 2
+              }
+            }
+          ]
+        },
+        {
+          "exercise": "Chest Supported Row",
+          "sets": [
+            {
+              "index": 1,
+              "reps": {
+                "min": 10,
+                "max": 10
+              },
+              "intensity": {
+                "type": "rir",
+                "value": 2
+              }
+            },
+            {
+              "index": 2,
+              "reps": {
+                "min": 10,
+                "max": 10
+              },
+              "intensity": {
+                "type": "rir",
+                "value": 2
+              }
+            },
+            {
+              "index": 3,
+              "reps": {
+                "min": 10,
+                "max": 10
+              },
+              "intensity": {
+                "type": "rir",
+                "value": 2
+              }
+            },
+            {
+              "index": 4,
+              "reps": {
+                "min": 10,
+                "max": 10
+              },
+              "intensity": {
+                "type": "rir",
+                "value": 2
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "day-2",
+      "name": "Lower A",
+      "day": 2,
+      "exercises": [
+        {
+          "exercise": "Back Squat",
+          "sets": [
+            {
+              "index": 1,
+              "reps": {
+                "min": 6,
+                "max": 6
+              },
+              "intensity": {
+                "type": "percent_1rm",
+                "value": 75
+              }
+            },
+            {
+              "index": 2,
+              "reps": {
+                "min": 6,
+                "max": 6
+              },
+              "intensity": {
+                "type": "percent_1rm",
+                "value": 75
+              }
+            },
+            {
+              "index": 3,
+              "reps": {
+                "min": 6,
+                "max": 6
+              },
+              "intensity": {
+                "type": "percent_1rm",
+                "value": 75
+              }
+            },
+            {
+              "index": 4,
+              "reps": {
+                "min": 6,
+                "max": 6
+              },
+              "intensity": {
+                "type": "percent_1rm",
+                "value": 75
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

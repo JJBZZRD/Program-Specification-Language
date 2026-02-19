@@ -1,0 +1,15 @@
+﻿(* PSL shorthand v0.1 *)
+
+shorthand       = set_block, [ws, intensity_clause] ;
+set_block       = integer, "x", reps ;
+reps            = integer | integer, "-", integer ;
+intensity_clause= "@", intensity ;
+intensity       = percent | rpe | rir ;
+percent         = number, "%" ;
+rpe             = ("RPE" | "rpe"), [ws], number ;
+rir             = ("RIR" | "rir"), [ws], number ;
+
+integer         = digit, {digit} ;
+number          = integer, [".", integer] ;
+ws              = {" " | "\t"} ;
+digit           = "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" ;
