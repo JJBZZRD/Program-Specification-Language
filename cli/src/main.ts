@@ -1,6 +1,7 @@
 ﻿#!/usr/bin/env node
 
 import { runCompileCommand } from "./commands/compile.js";
+import { runMaterializeCommand } from "./commands/materialize.js";
 import { runPrintCommand } from "./commands/print.js";
 import { runValidateCommand } from "./commands/validate.js";
 
@@ -9,11 +10,12 @@ type CommandHandler = (args: string[]) => Promise<number>;
 const handlers: Record<string, CommandHandler> = {
   validate: runValidateCommand,
   compile: runCompileCommand,
+  materialize: runMaterializeCommand,
   print: runPrintCommand
 };
 
 function printUsage(): void {
-  console.log("Usage: psl <validate|compile|print> <file> [--out <output-file>]");
+  console.log("Usage: psl <validate|compile|materialize|print> <file> [--out <output-file>]");
 }
 
 async function main(): Promise<number> {

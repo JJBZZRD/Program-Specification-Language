@@ -1,0 +1,26 @@
+﻿language_version: "0.1"
+metadata:
+  id: scheduling-demo
+  name: Scheduling Demo
+calendar:
+  start_date: "2026-03-02"
+  end_date: "2026-03-13"
+sessions:
+  - id: every-other-day
+    name: Every Other Day
+    schedule:
+      type: interval_days
+      every: 2
+    exercises:
+      - exercise: Back Squat
+        sets:
+          - "3x5 @75%"
+  - id: mon-fri
+    name: Mondays and Fridays
+    schedule:
+      type: weekdays
+      days: [MON, FRI]
+    exercises:
+      - exercise: Barbell Bench Press
+        sets:
+          - "5x5 @75%"

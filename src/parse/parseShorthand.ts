@@ -1,7 +1,8 @@
-﻿import type { IntensityTarget, RepTarget, SetPrescription } from "../ast/types.js";
+﻿import type { IntensityTarget, LoadUnit, RepTarget, SetPrescription } from "../ast/types.js";
 import { tokenizeShorthand } from "./tokenizer.js";
 
-const MAIN_PATTERN = /^(?<count>\d+)x(?<repMin>\d+)(?:-(?<repMax>\d+))?(?:\s*@\s*(?<intensity>.+))?$/i;
+const MAIN_PATTERN =
+  /^(?<count>\d+)x(?<repMin>\d+)(?:-(?<repMax>\d+))?(?:\s*@\s*(?<intensity>.+))?$/i;
 
 export class ShorthandParseError extends Error {
   constructor(message: string) {
@@ -46,6 +47,12 @@ function parseIntensity(raw: string): IntensityTarget {
   const rirMatch = normalized.match(/^rir\s*(?<value>\d+(?:\.\d+)?)$/i);
   if (rirMatch?.groups?.value !== undefined) {
     return { type: "rir", value: Number(rirMatch.groups.value) };
+  }
+
+  const loadMatch = normalized.match(/^(?<value>\d+(?:\.\d+)?)\s*(?<unit>kg|lb)$/i);
+  if (loadMatch?.groups?.value !== undefined && loadMatch.groups.unit !== undefined) {
+    const unit = loadMatch.groups.unit.toLowerCase() as LoadUnit;
+    return { type: "load", value: Number(loadMatch.groups.value), unit };
   }
 
   throw new ShorthandParseError(`Unsupported intensity expression: ${raw}`);

@@ -23,5 +23,15 @@ export function run(): void {
     }
   });
 
+  assert.deepStrictEqual(parseShorthand("5x5 @150kg"), {
+    count: 5,
+    reps: 5,
+    intensity: {
+      type: "load",
+      value: 150,
+      unit: "kg"
+    }
+  });
+
   assert.throws(() => parseShorthand("abc"), ShorthandParseError);
 }

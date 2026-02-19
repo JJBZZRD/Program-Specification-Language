@@ -1,4 +1,10 @@
-﻿import type { IntensityTarget, ProgramAst, RepRange, RepTarget } from "../ast/types.js";
+﻿import type {
+  IntensityTarget,
+  ProgramAst,
+  RepRange,
+  RepTarget,
+  SessionSchedule
+} from "../ast/types.js";
 import { hashSource } from "../util/hash.js";
 
 export interface CompiledSet {
@@ -17,7 +23,8 @@ export interface CompiledExercise {
 export interface CompiledSession {
   id: string;
   name: string;
-  day: number;
+  day?: number;
+  schedule?: SessionSchedule;
   exercises: CompiledExercise[];
 }
 
@@ -25,6 +32,7 @@ export interface CompiledProgram {
   language_version: ProgramAst["language_version"];
   source_hash: string;
   metadata: ProgramAst["metadata"];
+  calendar?: ProgramAst["calendar"];
   sessions: CompiledSession[];
 }
 
@@ -41,10 +49,12 @@ export function compileProgram(ast: ProgramAst): CompiledProgram {
     language_version: ast.language_version,
     source_hash: hashSource(ast),
     metadata: ast.metadata,
+    calendar: ast.calendar,
     sessions: ast.sessions.map((session) => ({
       id: session.id,
       name: session.name,
       day: session.day,
+      schedule: session.schedule,
       exercises: session.exercises.map((exercise) => {
         const sets: CompiledSet[] = [];
 

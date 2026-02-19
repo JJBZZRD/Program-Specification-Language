@@ -29,6 +29,7 @@ On Windows PowerShell (when `npm.ps1` is blocked), use `npm.cmd`:
 ```bash
 npm.cmd run psl:dev -- validate examples/hypertrophy_4day.psl.yaml
 npm.cmd run psl:dev -- compile examples/hypertrophy_4day.psl.yaml --out out.compiled.json
+npm.cmd run psl:dev -- materialize examples/scheduling_demo.psl.yaml --out out.materialized.json
 npm.cmd run psl:dev -- print examples/powerlifting_peak.psl.yaml
 ```
 

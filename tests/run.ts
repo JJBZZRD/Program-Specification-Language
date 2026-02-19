@@ -1,5 +1,6 @@
 ﻿import { run as runCompileSnapshot } from "./compile.snapshot.test.js";
 import { run as runExamples } from "./examples.test.js";
+import { run as runMaterialize } from "./materialize.test.js";
 import { run as runParse } from "./parse.test.js";
 import { run as runShorthand } from "./shorthand.test.js";
 import { run as runValidate } from "./validate.test.js";
@@ -11,7 +12,8 @@ const tests: Array<{ name: string; fn: TestFn }> = [
   { name: "shorthand", fn: runShorthand },
   { name: "validate", fn: runValidate },
   { name: "compile.snapshot", fn: runCompileSnapshot },
-  { name: "examples", fn: runExamples }
+  { name: "examples", fn: runExamples },
+  { name: "materialize", fn: runMaterialize }
 ];
 
 let failed = 0;

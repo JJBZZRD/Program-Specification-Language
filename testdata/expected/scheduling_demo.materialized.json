@@ -1,0 +1,634 @@
+{
+  "language_version": "0.1",
+  "source_hash": "0081ad636af74678bad9547ef02ef31e3a35327f28812ca9e94649d3fc337aff",
+  "metadata": {
+    "id": "scheduling-demo",
+    "name": "Scheduling Demo"
+  },
+  "calendar": {
+    "start_date": "2026-03-02",
+    "end_date": "2026-03-13"
+  },
+  "sessions": [
+    {
+      "id": "every-other-day",
+      "name": "Every Other Day",
+      "day": 1,
+      "schedule": {
+        "type": "interval_days",
+        "every": 2
+      },
+      "exercises": [
+        {
+          "exercise": "Back Squat",
+          "sets": [
+            {
+              "index": 1,
+              "reps": {
+                "min": 5,
+                "max": 5
+              },
+              "intensity": {
+                "type": "percent_1rm",
+                "value": 75
+              }
+            },
+            {
+              "index": 2,
+              "reps": {
+                "min": 5,
+                "max": 5
+              },
+              "intensity": {
+                "type": "percent_1rm",
+                "value": 75
+              }
+            },
+            {
+              "index": 3,
+              "reps": {
+                "min": 5,
+                "max": 5
+              },
+              "intensity": {
+                "type": "percent_1rm",
+                "value": 75
+              }
+            }
+          ]
+        }
+      ],
+      "date_iso": "2026-03-02",
+      "occurrence": 1,
+      "sequence": 1
+    },
+    {
+      "id": "mon-fri",
+      "name": "Mondays and Fridays",
+      "day": 1,
+      "schedule": {
+        "type": "weekdays",
+        "days": [
+          "MON",
+          "FRI"
+        ]
+      },
+      "exercises": [
+        {
+          "exercise": "Barbell Bench Press",
+          "sets": [
+            {
+              "index": 1,
+              "reps": {
+                "min": 5,
+                "max": 5
+              },
+              "intensity": {
+                "type": "percent_1rm",
+                "value": 75
+              }
+            },
+            {
+              "index": 2,
+              "reps": {
+                "min": 5,
+                "max": 5
+              },
+              "intensity": {
+                "type": "percent_1rm",
+                "value": 75
+              }
+            },
+            {
+              "index": 3,
+              "reps": {
+                "min": 5,
+                "max": 5
+              },
+              "intensity": {
+                "type": "percent_1rm",
+                "value": 75
+              }
+            },
+            {
+              "index": 4,
+              "reps": {
+                "min": 5,
+                "max": 5
+              },
+              "intensity": {
+                "type": "percent_1rm",
+                "value": 75
+              }
+            },
+            {
+              "index": 5,
+              "reps": {
+                "min": 5,
+                "max": 5
+              },
+              "intensity": {
+                "type": "percent_1rm",
+                "value": 75
+              }
+            }
+          ]
+        }
+      ],
+      "date_iso": "2026-03-02",
+      "occurrence": 1,
+      "sequence": 2
+    },
+    {
+      "id": "every-other-day",
+      "name": "Every Other Day",
+      "day": 3,
+      "schedule": {
+        "type": "interval_days",
+        "every": 2
+      },
+      "exercises": [
+        {
+          "exercise": "Back Squat",
+          "sets": [
+            {
+              "index": 1,
+              "reps": {
+                "min": 5,
+                "max": 5
+              },
+              "intensity": {
+                "type": "percent_1rm",
+                "value": 75
+              }
+            },
+            {
+              "index": 2,
+              "reps": {
+                "min": 5,
+                "max": 5
+              },
+              "intensity": {
+                "type": "percent_1rm",
+                "value": 75
+              }
+            },
+            {
+              "index": 3,
+              "reps": {
+                "min": 5,
+                "max": 5
+              },
+              "intensity": {
+                "type": "percent_1rm",
+                "value": 75
+              }
+            }
+          ]
+        }
+      ],
+      "date_iso": "2026-03-04",
+      "occurrence": 2,
+      "sequence": 3
+    },
+    {
+      "id": "every-other-day",
+      "name": "Every Other Day",
+      "day": 5,
+      "schedule": {
+        "type": "interval_days",
+        "every": 2
+      },
+      "exercises": [
+        {
+          "exercise": "Back Squat",
+          "sets": [
+            {
+              "index": 1,
+              "reps": {
+                "min": 5,
+                "max": 5
+              },
+              "intensity": {
+                "type": "percent_1rm",
+                "value": 75
+              }
+            },
+            {
+              "index": 2,
+              "reps": {
+                "min": 5,
+                "max": 5
+              },
+              "intensity": {
+                "type": "percent_1rm",
+                "value": 75
+              }
+            },
+            {
+              "index": 3,
+              "reps": {
+                "min": 5,
+                "max": 5
+              },
+              "intensity": {
+                "type": "percent_1rm",
+                "value": 75
+              }
+            }
+          ]
+        }
+      ],
+      "date_iso": "2026-03-06",
+      "occurrence": 3,
+      "sequence": 4
+    },
+    {
+      "id": "mon-fri",
+      "name": "Mondays and Fridays",
+      "day": 5,
+      "schedule": {
+        "type": "weekdays",
+        "days": [
+          "MON",
+          "FRI"
+        ]
+      },
+      "exercises": [
+        {
+          "exercise": "Barbell Bench Press",
+          "sets": [
+            {
+              "index": 1,
+              "reps": {
+                "min": 5,
+                "max": 5
+              },
+              "intensity": {
+                "type": "percent_1rm",
+                "value": 75
+              }
+            },
+            {
+              "index": 2,
+              "reps": {
+                "min": 5,
+                "max": 5
+              },
+              "intensity": {
+                "type": "percent_1rm",
+                "value": 75
+              }
+            },
+            {
+              "index": 3,
+              "reps": {
+                "min": 5,
+                "max": 5
+              },
+              "intensity": {
+                "type": "percent_1rm",
+                "value": 75
+              }
+            },
+            {
+              "index": 4,
+              "reps": {
+                "min": 5,
+                "max": 5
+              },
+              "intensity": {
+                "type": "percent_1rm",
+                "value": 75
+              }
+            },
+            {
+              "index": 5,
+              "reps": {
+                "min": 5,
+                "max": 5
+              },
+              "intensity": {
+                "type": "percent_1rm",
+                "value": 75
+              }
+            }
+          ]
+        }
+      ],
+      "date_iso": "2026-03-06",
+      "occurrence": 2,
+      "sequence": 5
+    },
+    {
+      "id": "every-other-day",
+      "name": "Every Other Day",
+      "day": 7,
+      "schedule": {
+        "type": "interval_days",
+        "every": 2
+      },
+      "exercises": [
+        {
+          "exercise": "Back Squat",
+          "sets": [
+            {
+              "index": 1,
+              "reps": {
+                "min": 5,
+                "max": 5
+              },
+              "intensity": {
+                "type": "percent_1rm",
+                "value": 75
+              }
+            },
+            {
+              "index": 2,
+              "reps": {
+                "min": 5,
+                "max": 5
+              },
+              "intensity": {
+                "type": "percent_1rm",
+                "value": 75
+              }
+            },
+            {
+              "index": 3,
+              "reps": {
+                "min": 5,
+                "max": 5
+              },
+              "intensity": {
+                "type": "percent_1rm",
+                "value": 75
+              }
+            }
+          ]
+        }
+      ],
+      "date_iso": "2026-03-08",
+      "occurrence": 4,
+      "sequence": 6
+    },
+    {
+      "id": "mon-fri",
+      "name": "Mondays and Fridays",
+      "day": 8,
+      "schedule": {
+        "type": "weekdays",
+        "days": [
+          "MON",
+          "FRI"
+        ]
+      },
+      "exercises": [
+        {
+          "exercise": "Barbell Bench Press",
+          "sets": [
+            {
+              "index": 1,
+              "reps": {
+                "min": 5,
+                "max": 5
+              },
+              "intensity": {
+                "type": "percent_1rm",
+                "value": 75
+              }
+            },
+            {
+              "index": 2,
+              "reps": {
+                "min": 5,
+                "max": 5
+              },
+              "intensity": {
+                "type": "percent_1rm",
+                "value": 75
+              }
+            },
+            {
+              "index": 3,
+              "reps": {
+                "min": 5,
+                "max": 5
+              },
+              "intensity": {
+                "type": "percent_1rm",
+                "value": 75
+              }
+            },
+            {
+              "index": 4,
+              "reps": {
+                "min": 5,
+                "max": 5
+              },
+              "intensity": {
+                "type": "percent_1rm",
+                "value": 75
+              }
+            },
+            {
+              "index": 5,
+              "reps": {
+                "min": 5,
+                "max": 5
+              },
+              "intensity": {
+                "type": "percent_1rm",
+                "value": 75
+              }
+            }
+          ]
+        }
+      ],
+      "date_iso": "2026-03-09",
+      "occurrence": 3,
+      "sequence": 7
+    },
+    {
+      "id": "every-other-day",
+      "name": "Every Other Day",
+      "day": 9,
+      "schedule": {
+        "type": "interval_days",
+        "every": 2
+      },
+      "exercises": [
+        {
+          "exercise": "Back Squat",
+          "sets": [
+            {
+              "index": 1,
+              "reps": {
+                "min": 5,
+                "max": 5
+              },
+              "intensity": {
+                "type": "percent_1rm",
+                "value": 75
+              }
+            },
+            {
+              "index": 2,
+              "reps": {
+                "min": 5,
+                "max": 5
+              },
+              "intensity": {
+                "type": "percent_1rm",
+                "value": 75
+              }
+            },
+            {
+              "index": 3,
+              "reps": {
+                "min": 5,
+                "max": 5
+              },
+              "intensity": {
+                "type": "percent_1rm",
+                "value": 75
+              }
+            }
+          ]
+        }
+      ],
+      "date_iso": "2026-03-10",
+      "occurrence": 5,
+      "sequence": 8
+    },
+    {
+      "id": "every-other-day",
+      "name": "Every Other Day",
+      "day": 11,
+      "schedule": {
+        "type": "interval_days",
+        "every": 2
+      },
+      "exercises": [
+        {
+          "exercise": "Back Squat",
+          "sets": [
+            {
+              "index": 1,
+              "reps": {
+                "min": 5,
+                "max": 5
+              },
+              "intensity": {
+                "type": "percent_1rm",
+                "value": 75
+              }
+            },
+            {
+              "index": 2,
+              "reps": {
+                "min": 5,
+                "max": 5
+              },
+              "intensity": {
+                "type": "percent_1rm",
+                "value": 75
+              }
+            },
+            {
+              "index": 3,
+              "reps": {
+                "min": 5,
+                "max": 5
+              },
+              "intensity": {
+                "type": "percent_1rm",
+                "value": 75
+              }
+            }
+          ]
+        }
+      ],
+      "date_iso": "2026-03-12",
+      "occurrence": 6,
+      "sequence": 9
+    },
+    {
+      "id": "mon-fri",
+      "name": "Mondays and Fridays",
+      "day": 12,
+      "schedule": {
+        "type": "weekdays",
+        "days": [
+          "MON",
+          "FRI"
+        ]
+      },
+      "exercises": [
+        {
+          "exercise": "Barbell Bench Press",
+          "sets": [
+            {
+              "index": 1,
+              "reps": {
+                "min": 5,
+                "max": 5
+              },
+              "intensity": {
+                "type": "percent_1rm",
+                "value": 75
+              }
+            },
+            {
+              "index": 2,
+              "reps": {
+                "min": 5,
+                "max": 5
+              },
+              "intensity": {
+                "type": "percent_1rm",
+                "value": 75
+              }
+            },
+            {
+              "index": 3,
+              "reps": {
+                "min": 5,
+                "max": 5
+              },
+              "intensity": {
+                "type": "percent_1rm",
+                "value": 75
+              }
+            },
+            {
+              "index": 4,
+              "reps": {
+                "min": 5,
+                "max": 5
+              },
+              "intensity": {
+                "type": "percent_1rm",
+                "value": 75
+              }
+            },
+            {
+              "index": 5,
+              "reps": {
+                "min": 5,
+                "max": 5
+              },
+              "intensity": {
+                "type": "percent_1rm",
+                "value": 75
+              }
+            }
+          ]
+        }
+      ],
+      "date_iso": "2026-03-13",
+      "occurrence": 4,
+      "sequence": 10
+    }
+  ]
+}
