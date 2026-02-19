@@ -1,7 +1,9 @@
 ﻿import { run as runCompileSnapshot } from "./compile.snapshot.test.js";
+import { run as runCadence } from "./cadence.test.js";
 import { run as runExamples } from "./examples.test.js";
 import { run as runMaterialize } from "./materialize.test.js";
 import { run as runParse } from "./parse.test.js";
+import { run as runProgression } from "./progression.test.js";
 import { run as runShorthand } from "./shorthand.test.js";
 import { run as runValidate } from "./validate.test.js";
 
@@ -13,6 +15,8 @@ const tests: Array<{ name: string; fn: TestFn }> = [
   { name: "validate", fn: runValidate },
   { name: "compile.snapshot", fn: runCompileSnapshot },
   { name: "examples", fn: runExamples },
+  { name: "progression", fn: runProgression },
+  { name: "cadence", fn: runCadence },
   { name: "materialize", fn: runMaterialize }
 ];
 

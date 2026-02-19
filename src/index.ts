@@ -13,6 +13,7 @@ export * from "./compile/materialize.js";
 export * from "./compile/rounding.js";
 
 export * from "./runtime/context.js";
+export * from "./runtime/progression.js";
 export * from "./runtime/rules.js";
 
 export * from "./util/hash.js";

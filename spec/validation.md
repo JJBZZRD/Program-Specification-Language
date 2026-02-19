@@ -20,6 +20,40 @@
 2. `rpe` value: `1 <= value <= 10`.
 3. `rir` value: `0 <= value <= 6`.
 4. `load` value: `value > 0` and `unit` is `kg` or `lb`.
+5. `load_range` values: `min > 0`, `max >= min`, and `unit` is `kg` or `lb`.
+
+## Progression
+
+Progression is optional and is defined per set prescription.
+
+### Types
+
+- `weekly_increment` (legacy alias)
+- `increment` (preferred)
+
+Both represent the same increment rule shape; `weekly_increment` defaults to a weekly cadence when `cadence` is omitted.
+
+### `increment` / `weekly_increment`
+
+1. `progression.type` must be `weekly_increment` or `increment`.
+2. `progression` requires `intensity` (there must be a target to increment).
+3. `progression.by` must be:
+   - a number for `percent_1rm`, `rpe`, `rir`, and `load`
+   - a number or an object `{min,max}` (at least one of `min`/`max`) for `load_range`
+4. `progression.when` is optional:
+   - If omitted, it defaults to `session_success == true` when applying progression.
+   - `session_success` checks the session completion `success` boolean (default `true`).
+   - `metric_vs_target` compares achieved metrics from completion data to the current target:
+     - `metric`: `load` | `rpe` | `rir`
+     - `op`: one of `>=`, `>`, `<=`, `<`, `==`, `!=`
+     - `target`: `value` | `min` | `max` (for `load_range`, `target` must be `min` or `max`)
+5. `progression.cadence` controls how often increments can be earned/applied:
+   - `type: weeks` (weekly cadence)
+   - `type: sessions` (per-session cadence)
+   - optional `every` (integer >= 1) controls "every N weeks" or "every N sessions"
+   - for `sessions` cadence, optional `on_weekdays` can filter which session dates count (e.g., only Fridays)
+6. If `progression.type = increment`, `progression.cadence` is required.
+7. If any set uses `progression`, the program must include a `calendar` (so cadence can be applied over time).
 
 ## Calendar and Scheduling
 

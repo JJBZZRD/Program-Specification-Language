@@ -5,11 +5,15 @@
   ProgramAst,
   ProgramCalendar,
   ProgramMetadata,
+  ComparisonOp,
+  ProgressionCondition,
+  ProgressionRule,
   RepTarget,
   Session,
   LoadUnit,
   SessionSchedule,
   SetPrescription,
+  WeeklyIncrementBy,
   Weekday
 } from "../ast/types.js";
 import { CURRENT_LANGUAGE_VERSION } from "../ast/version.js";
@@ -21,6 +25,7 @@ type UnknownRecord = Record<string, unknown>;
 const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const WEEKDAYS: readonly Weekday[] = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"];
 const WEEKDAY_SET = new Set<string>(WEEKDAYS);
+const COMPARISON_OP_SET = new Set<string>([">=", ">", "<=", "<", "==", "!="]);
 
 function isRecord(value: unknown): value is UnknownRecord {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -148,12 +153,62 @@ function parseIntensity(
   }
 
   const type = intensity.type;
-  const value = intensity.value;
 
-  if (type !== "percent_1rm" && type !== "rpe" && type !== "rir" && type !== "load") {
-    addError(diagnostics, `${path}.type`, "Intensity type must be percent_1rm, rpe, rir, or load.");
+  if (
+    type !== "percent_1rm" &&
+    type !== "rpe" &&
+    type !== "rir" &&
+    type !== "load" &&
+    type !== "load_range"
+  ) {
+    addError(
+      diagnostics,
+      `${path}.type`,
+      "Intensity type must be percent_1rm, rpe, rir, load, or load_range."
+    );
     return undefined;
   }
+
+  if (type === "load_range") {
+    const minRaw = intensity.min;
+    const maxRaw = intensity.max;
+
+    if (typeof minRaw !== "number") {
+      addError(diagnostics, `${path}.min`, "load_range intensity min must be a number.");
+      return undefined;
+    }
+
+    if (typeof maxRaw !== "number") {
+      addError(diagnostics, `${path}.max`, "load_range intensity max must be a number.");
+      return undefined;
+    }
+
+    if (!(minRaw > 0)) {
+      addError(diagnostics, `${path}.min`, "load_range intensity min must be > 0.");
+      return undefined;
+    }
+
+    if (maxRaw < minRaw) {
+      addError(diagnostics, `${path}.max`, "load_range intensity max must be >= min.");
+      return undefined;
+    }
+
+    const unitRaw = intensity.unit;
+    if (typeof unitRaw !== "string") {
+      addError(diagnostics, `${path}.unit`, "load_range intensity requires unit kg or lb.");
+      return undefined;
+    }
+
+    const unit = unitRaw.toLowerCase();
+    if (unit !== "kg" && unit !== "lb") {
+      addError(diagnostics, `${path}.unit`, "load_range intensity unit must be kg or lb.");
+      return undefined;
+    }
+
+    return { type: "load_range", min: minRaw, max: maxRaw, unit: unit as LoadUnit };
+  }
+
+  const value = intensity.value;
 
   if (typeof value !== "number") {
     addError(diagnostics, `${path}.value`, "Intensity value must be a number.");
@@ -206,6 +261,295 @@ function parseIntensity(
 
   return { type: "load", value, unit: unit as LoadUnit };
 }
+
+function parseProgressionCondition(
+  condition: unknown,
+  intensity: IntensityTarget,
+  path: string,
+  diagnostics: Diagnostic[]
+): ProgressionCondition | undefined {
+  if (condition === undefined) {
+    return undefined;
+  }
+
+  if (!isRecord(condition)) {
+    addError(diagnostics, path, "progression.when must be an object.");
+    return undefined;
+  }
+
+  const type = condition.type;
+
+  if (type !== "session_success" && type !== "metric_vs_target") {
+    addError(
+      diagnostics,
+      `${path}.type`,
+      "progression.when.type must be session_success or metric_vs_target."
+    );
+    return undefined;
+  }
+
+  if (type === "session_success") {
+    const equalsRaw = condition.equals;
+
+    if (equalsRaw !== undefined && typeof equalsRaw !== "boolean") {
+      addError(diagnostics, `${path}.equals`, "session_success.equals must be a boolean.");
+      return undefined;
+    }
+
+    return {
+      type: "session_success",
+      equals: equalsRaw as boolean | undefined
+    };
+  }
+
+  if (intensity.type === "percent_1rm") {
+    addError(
+      diagnostics,
+      path,
+      "metric_vs_target conditions are not supported for percent_1rm intensity."
+    );
+    return undefined;
+  }
+
+  const metricRaw = condition.metric;
+  if (metricRaw !== "load" && metricRaw !== "rpe" && metricRaw !== "rir") {
+    addError(diagnostics, `${path}.metric`, "metric must be load, rpe, or rir.");
+    return undefined;
+  }
+
+  const opRaw = condition.op;
+  if (typeof opRaw !== "string" || !COMPARISON_OP_SET.has(opRaw)) {
+    addError(diagnostics, `${path}.op`, "op must be one of: >=, >, <=, <, ==, !=.");
+    return undefined;
+  }
+
+  const targetRaw = condition.target;
+  const defaultTarget = intensity.type === "load_range" ? "max" : "value";
+  const targetValue = targetRaw === undefined ? defaultTarget : targetRaw;
+
+  if (targetValue !== "value" && targetValue !== "min" && targetValue !== "max") {
+    addError(diagnostics, `${path}.target`, "target must be value, min, or max.");
+    return undefined;
+  }
+
+  if (intensity.type === "load_range") {
+    if (metricRaw !== "load") {
+      addError(diagnostics, `${path}.metric`, "load_range intensity progression must use metric load.");
+      return undefined;
+    }
+
+    if (targetValue === "value") {
+      addError(diagnostics, `${path}.target`, "load_range conditions require target min or max.");
+      return undefined;
+    }
+  } else if (intensity.type === "load") {
+    if (metricRaw !== "load") {
+      addError(diagnostics, `${path}.metric`, "load intensity progression must use metric load.");
+      return undefined;
+    }
+
+    if (targetValue !== "value") {
+      addError(diagnostics, `${path}.target`, "load conditions only support target value.");
+      return undefined;
+    }
+  } else if (intensity.type === "rpe") {
+    if (metricRaw !== "rpe") {
+      addError(diagnostics, `${path}.metric`, "rpe intensity progression must use metric rpe.");
+      return undefined;
+    }
+
+    if (targetValue !== "value") {
+      addError(diagnostics, `${path}.target`, "rpe conditions only support target value.");
+      return undefined;
+    }
+  } else if (intensity.type === "rir") {
+    if (metricRaw !== "rir") {
+      addError(diagnostics, `${path}.metric`, "rir intensity progression must use metric rir.");
+      return undefined;
+    }
+
+    if (targetValue !== "value") {
+      addError(diagnostics, `${path}.target`, "rir conditions only support target value.");
+      return undefined;
+    }
+  }
+
+  return {
+    type: "metric_vs_target",
+    metric: metricRaw,
+    op: opRaw as ComparisonOp,
+    target: targetValue as "value" | "min" | "max"
+  };
+}
+
+function parseProgressionCadence(
+  cadence: unknown,
+  path: string,
+  diagnostics: Diagnostic[]
+): ProgressionRule["cadence"] | undefined {
+  if (cadence === undefined) {
+    return undefined;
+  }
+
+  const startIndex = diagnostics.length;
+
+  if (!isRecord(cadence)) {
+    addError(diagnostics, path, "progression.cadence must be an object.");
+    return undefined;
+  }
+
+  const type = cadence.type;
+  if (type !== "weeks" && type !== "sessions") {
+    addError(diagnostics, `${path}.type`, "progression.cadence.type must be weeks or sessions.");
+    return undefined;
+  }
+
+  const everyRaw = cadence.every;
+  if (everyRaw !== undefined) {
+    if (typeof everyRaw !== "number" || !Number.isInteger(everyRaw) || everyRaw < 1) {
+      addError(diagnostics, `${path}.every`, "progression.cadence.every must be an integer >= 1.");
+    }
+  }
+
+  const onWeekdaysRaw = cadence.on_weekdays;
+
+  if (type === "weeks") {
+    if (onWeekdaysRaw !== undefined) {
+      addError(diagnostics, `${path}.on_weekdays`, "progression.cadence.on_weekdays is only valid for sessions cadence.");
+    }
+
+    if (hasNewErrors(diagnostics, startIndex)) {
+      return undefined;
+    }
+
+    return {
+      type: "weeks",
+      every: everyRaw as number | undefined
+    };
+  }
+
+  if (onWeekdaysRaw !== undefined) {
+    if (!Array.isArray(onWeekdaysRaw) || onWeekdaysRaw.length === 0) {
+      addError(diagnostics, `${path}.on_weekdays`, "on_weekdays must be a non-empty array.");
+    } else {
+      onWeekdaysRaw.forEach((value, index) => {
+        const weekdayPath = `${path}.on_weekdays[${index}]`;
+        if (typeof value !== "string" || !WEEKDAY_SET.has(value)) {
+          addError(diagnostics, weekdayPath, `Invalid weekday. Expected one of: ${WEEKDAYS.join(", ")}.`);
+        }
+      });
+    }
+  }
+
+  if (hasNewErrors(diagnostics, startIndex)) {
+    return undefined;
+  }
+
+  return {
+    type: "sessions",
+    every: everyRaw as number | undefined,
+    on_weekdays: onWeekdaysRaw as Weekday[] | undefined
+  };
+}
+
+function parseProgression(
+  progression: unknown,
+  intensity: IntensityTarget | undefined,
+  path: string,
+  diagnostics: Diagnostic[]
+): ProgressionRule | undefined {
+  if (progression === undefined) {
+    return undefined;
+  }
+
+  const startIndex = diagnostics.length;
+
+  if (!isRecord(progression)) {
+    addError(diagnostics, path, "progression must be an object.");
+    return undefined;
+  }
+
+  const type = progression.type;
+  if (type !== "weekly_increment" && type !== "increment") {
+    addError(diagnostics, `${path}.type`, "progression.type must be weekly_increment or increment.");
+    return undefined;
+  }
+
+  if (!intensity) {
+    addError(diagnostics, path, "progression requires intensity.");
+    return undefined;
+  }
+
+  const when = parseProgressionCondition(progression.when, intensity, `${path}.when`, diagnostics);
+  const cadence = parseProgressionCadence(progression.cadence, `${path}.cadence`, diagnostics);
+
+  if (type === "increment" && cadence === undefined) {
+    addError(diagnostics, `${path}.cadence`, "increment progression requires cadence.");
+    return undefined;
+  }
+
+  const byRaw = progression.by;
+  if (byRaw === undefined) {
+    addError(diagnostics, `${path}.by`, "weekly_increment progression requires by.");
+    return undefined;
+  }
+
+  let by: WeeklyIncrementBy | undefined;
+
+  if (intensity.type === "load_range") {
+    if (typeof byRaw === "number") {
+      if (!Number.isFinite(byRaw)) {
+        addError(diagnostics, `${path}.by`, "by must be a finite number.");
+      } else {
+        by = byRaw;
+      }
+    } else if (isRecord(byRaw)) {
+      const minRaw = byRaw.min;
+      const maxRaw = byRaw.max;
+
+      if (minRaw === undefined && maxRaw === undefined) {
+        addError(diagnostics, `${path}.by`, "by must include at least one of: min, max.");
+      }
+
+      if (minRaw !== undefined) {
+        if (typeof minRaw !== "number" || !Number.isFinite(minRaw)) {
+          addError(diagnostics, `${path}.by.min`, "by.min must be a finite number.");
+        }
+      }
+
+      if (maxRaw !== undefined) {
+        if (typeof maxRaw !== "number" || !Number.isFinite(maxRaw)) {
+          addError(diagnostics, `${path}.by.max`, "by.max must be a finite number.");
+        }
+      }
+
+      by = {
+        min: minRaw as number | undefined,
+        max: maxRaw as number | undefined
+      };
+    } else {
+      addError(diagnostics, `${path}.by`, "by must be a number or an object {min,max}.");
+    }
+  } else {
+    if (typeof byRaw !== "number" || !Number.isFinite(byRaw)) {
+      addError(diagnostics, `${path}.by`, "by must be a finite number.");
+    } else {
+      by = byRaw;
+    }
+  }
+
+  if (hasNewErrors(diagnostics, startIndex)) {
+    return undefined;
+  }
+
+  return {
+    type: type as "weekly_increment" | "increment",
+    when,
+    by: by as WeeklyIncrementBy,
+    cadence
+  };
+}
+
 function parseSet(
   set: unknown,
   path: string,
@@ -238,6 +582,51 @@ function parseSet(
     return undefined;
   }
 
+  const shorthandRaw = set.shorthand;
+  if (typeof shorthandRaw === "string") {
+    if (set.count !== undefined || set.reps !== undefined || set.intensity !== undefined) {
+      addError(
+        diagnostics,
+        path,
+        "Set object may specify either shorthand or (count,reps,intensity), not both."
+      );
+      return undefined;
+    }
+
+    let shorthand: SetPrescription;
+    try {
+      shorthand = parseShorthand(shorthandRaw);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Invalid shorthand expression.";
+      addError(diagnostics, `${path}.shorthand`, message);
+      return undefined;
+    }
+
+    const intensity = parseIntensity(shorthand.intensity, `${path}.intensity`, diagnostics);
+
+    if (shorthand.intensity !== undefined && intensity === undefined) {
+      return undefined;
+    }
+
+    const progression = parseProgression(set.progression, intensity, `${path}.progression`, diagnostics);
+
+    const note = set.note;
+    if (note !== undefined && typeof note !== "string") {
+      addError(diagnostics, `${path}.note`, "Set note must be a string.");
+    }
+
+    if (hasNewErrors(diagnostics, startIndex)) {
+      return undefined;
+    }
+
+    return {
+      ...shorthand,
+      intensity,
+      progression,
+      note: note as string | undefined
+    };
+  }
+
   const count = set.count;
   if (typeof count !== "number" || !Number.isInteger(count) || count < 1) {
     addError(diagnostics, `${path}.count`, "Set count must be an integer >= 1.");
@@ -245,6 +634,7 @@ function parseSet(
 
   const reps = parseRepTarget(set.reps, `${path}.reps`, diagnostics);
   const intensity = parseIntensity(set.intensity, `${path}.intensity`, diagnostics);
+  const progression = parseProgression(set.progression, intensity, `${path}.progression`, diagnostics);
 
   const note = set.note;
   if (note !== undefined && typeof note !== "string") {
@@ -259,6 +649,7 @@ function parseSet(
     count: count as number,
     reps: reps as RepTarget,
     intensity,
+    progression,
     note: note as string | undefined
   };
 }
@@ -556,6 +947,14 @@ export function validateAst(ast: unknown): ValidationResult<ProgramAst> {
     }
   }
 
+  const usesProgression = sessions.some((session) =>
+    session.exercises.some((exercise) => exercise.sets.some((set) => set.progression !== undefined))
+  );
+
+  if (usesProgression && !calendar) {
+    addError(diagnostics, "$.calendar", "calendar is required when using progression.");
+  }
+
   const valid = !hasNewErrors(diagnostics, startIndex);
   if (!valid || !validLanguage || !metadata) {
     return { valid: false, diagnostics };
@@ -572,4 +971,5 @@ export function validateAst(ast: unknown): ValidationResult<ProgramAst> {
     }
   };
 }
+
 

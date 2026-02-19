@@ -1,0 +1,53 @@
+[
+  {
+    "session_id": "monday",
+    "date_iso": "2026-03-02",
+    "success": true,
+    "exercises": [
+      {
+        "exercise": "Deadlift",
+        "sets": [
+          {
+            "index": 1,
+            "load": { "value": 100, "unit": "kg" }
+          }
+        ]
+      },
+      {
+        "exercise": "Barbell Bench Press",
+        "sets": [
+          {
+            "index": 1,
+            "load": { "value": 90, "unit": "kg" }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "session_id": "monday",
+    "date_iso": "2026-03-09",
+    "success": true,
+    "exercises": [
+      {
+        "exercise": "Deadlift",
+        "sets": [
+          {
+            "index": 1,
+            "load": { "value": 102.5, "unit": "kg" }
+          }
+        ]
+      },
+      {
+        "exercise": "Barbell Bench Press",
+        "sets": [
+          {
+            "index": 1,
+            "load": { "value": 92.5, "unit": "kg" }
+          }
+        ]
+      }
+    ]
+  }
+]
+

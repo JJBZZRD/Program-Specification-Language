@@ -34,6 +34,23 @@ function parseReps(repMinRaw: string, repMaxRaw?: string): RepTarget {
 function parseIntensity(raw: string): IntensityTarget {
   const normalized = raw.trim();
 
+  const loadRangeMatch = normalized.match(
+    /^\[(?<min>\d+(?:\.\d+)?)\s*,\s*(?<max>\d+(?:\.\d+)?)\]\s*(?<unit>kg|lb)$/i
+  );
+  if (
+    loadRangeMatch?.groups?.min !== undefined &&
+    loadRangeMatch.groups.max !== undefined &&
+    loadRangeMatch.groups.unit !== undefined
+  ) {
+    const unit = loadRangeMatch.groups.unit.toLowerCase() as LoadUnit;
+    return {
+      type: "load_range",
+      min: Number(loadRangeMatch.groups.min),
+      max: Number(loadRangeMatch.groups.max),
+      unit
+    };
+  }
+
   const percentMatch = normalized.match(/^(?<value>\d+(?:\.\d+)?)%$/);
   if (percentMatch?.groups?.value !== undefined) {
     return { type: "percent_1rm", value: Number(percentMatch.groups.value) };

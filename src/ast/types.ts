@@ -47,7 +47,19 @@ export type LoadIntensity = {
   unit: LoadUnit;
 };
 
-export type IntensityTarget = Percent1rmIntensity | RpeIntensity | RirIntensity | LoadIntensity;
+export type LoadRangeIntensity = {
+  type: "load_range";
+  min: number;
+  max: number;
+  unit: LoadUnit;
+};
+
+export type IntensityTarget =
+  | Percent1rmIntensity
+  | RpeIntensity
+  | RirIntensity
+  | LoadIntensity
+  | LoadRangeIntensity;
 
 export type IntensityType = IntensityTarget["type"];
 
@@ -58,10 +70,47 @@ export type RepRange = {
 
 export type RepTarget = number | RepRange;
 
+export type ComparisonOp = ">=" | ">" | "<=" | "<" | "==" | "!=";
+
+export type ProgressionCondition =
+  | {
+      type: "session_success";
+      equals?: boolean;
+    }
+  | {
+      type: "metric_vs_target";
+      metric: "load" | "rpe" | "rir";
+      op: ComparisonOp;
+      target?: "value" | "min" | "max";
+    };
+
+export type WeeklyIncrementBy = number | { min?: number; max?: number };
+
+export type ProgressionCadence =
+  | {
+      type: "weeks";
+      every?: number;
+    }
+  | {
+      type: "sessions";
+      every?: number;
+      on_weekdays?: Weekday[];
+    };
+
+export type WeeklyIncrementProgression = {
+  type: "weekly_increment" | "increment";
+  when?: ProgressionCondition;
+  by: WeeklyIncrementBy;
+  cadence?: ProgressionCadence;
+};
+
+export type ProgressionRule = WeeklyIncrementProgression;
+
 export interface SetPrescription {
   count: number;
   reps: RepTarget;
   intensity?: IntensityTarget;
+  progression?: ProgressionRule;
   note?: string;
 }
 

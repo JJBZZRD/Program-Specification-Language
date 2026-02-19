@@ -1,0 +1,14 @@
+{
+  "sessions": [
+    { "session_id": "bench-every-4-days", "date_iso": "2026-03-02", "success": true },
+    { "session_id": "bench-every-4-days", "date_iso": "2026-03-06", "success": true },
+    { "session_id": "bench-every-4-days", "date_iso": "2026-03-10", "success": true },
+
+    { "session_id": "bench-mon-fri", "date_iso": "2026-03-06", "success": true },
+    { "session_id": "bench-mon-fri", "date_iso": "2026-03-13", "success": true },
+
+    { "session_id": "squat-weekly", "date_iso": "2026-03-02", "success": true },
+    { "session_id": "squat-weekly", "date_iso": "2026-03-09", "success": true }
+  ]
+}
+

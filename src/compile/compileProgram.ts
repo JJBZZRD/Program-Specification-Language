@@ -1,6 +1,7 @@
 ﻿import type {
   IntensityTarget,
   ProgramAst,
+  ProgressionRule,
   RepRange,
   RepTarget,
   SessionSchedule
@@ -11,6 +12,7 @@ export interface CompiledSet {
   index: number;
   reps: RepRange;
   intensity?: IntensityTarget;
+  progression?: ProgressionRule;
   note?: string;
 }
 
@@ -64,6 +66,7 @@ export function compileProgram(ast: ProgramAst): CompiledProgram {
               index: sets.length + 1,
               reps: normalizeReps(set.reps),
               intensity: set.intensity,
+              progression: set.progression,
               note: set.note
             });
           }

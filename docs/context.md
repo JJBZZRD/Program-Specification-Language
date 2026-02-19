@@ -40,7 +40,7 @@ PSL currently focuses on:
 
 - Program metadata and structure (phases, weeks, sessions)
 - Exercise prescriptions (sets, reps, intensity, rest)
-- Progression model representation
+- Progression model representation (currently set-level increment rules with configurable cadence)
 - Versioned schema evolution
 
 Out of scope for v0.1:

@@ -15,7 +15,9 @@ const handlers: Record<string, CommandHandler> = {
 };
 
 function printUsage(): void {
-  console.log("Usage: psl <validate|compile|materialize|print> <file> [--out <output-file>]");
+  console.log(
+    "Usage: psl <validate|compile|materialize|print> <file> [--out <output-file>] [--results <results.json>]"
+  );
 }
 
 async function main(): Promise<number> {

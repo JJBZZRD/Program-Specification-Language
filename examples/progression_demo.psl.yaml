@@ -1,0 +1,63 @@
+language_version: "0.1"
+metadata:
+  id: progression-demo
+  name: Progression Demo
+  description: Weekly progression driven by completion results.
+calendar:
+  start_date: "2026-03-02"
+  end_date: "2026-03-16"
+sessions:
+  - id: monday
+    name: Monday Progression
+    schedule:
+      type: weekdays
+      days: [MON]
+    exercises:
+      - exercise: Deadlift
+        sets:
+          - count: 1
+            reps: 5
+            intensity:
+              type: load
+              value: 100
+              unit: kg
+            progression:
+              type: weekly_increment
+              when:
+                type: metric_vs_target
+                metric: load
+                op: ">="
+                target: value
+              by: 2.5
+      - exercise: Barbell Bench Press
+        sets:
+          - shorthand: "1x5 @[80,90]kg"
+            progression:
+              type: weekly_increment
+              when:
+                type: metric_vs_target
+                metric: load
+                op: ">="
+                target: max
+              by: 2.5
+      - exercise: Pull-Up
+        sets:
+          - count: 1
+            reps: 8
+            intensity:
+              type: rpe
+              value: 8
+            progression:
+              type: weekly_increment
+              by: 0.5
+      - exercise: Lateral Raise
+        sets:
+          - count: 1
+            reps: 12
+            intensity:
+              type: rir
+              value: 2
+            progression:
+              type: weekly_increment
+              by: -0.5
+

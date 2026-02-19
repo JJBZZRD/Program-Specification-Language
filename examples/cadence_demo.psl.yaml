@@ -1,0 +1,72 @@
+language_version: "0.1"
+metadata:
+  id: cadence-demo
+  name: Cadence Demo
+  description: Examples of weekly vs session-based progression cadence.
+calendar:
+  start_date: "2026-03-02"
+  end_date: "2026-03-16"
+sessions:
+  - id: bench-every-4-days
+    name: Bench Every 4 Days
+    schedule:
+      type: interval_days
+      every: 4
+    exercises:
+      - exercise: Barbell Bench Press
+        sets:
+          - count: 1
+            reps: 5
+            intensity:
+              type: load
+              value: 100
+              unit: kg
+            progression:
+              type: increment
+              cadence:
+                type: sessions
+                every: 3
+              by: 2.5
+
+  - id: bench-mon-fri
+    name: Bench Mon/Fri (Progress On Fridays)
+    schedule:
+      type: weekdays
+      days: [MON, FRI]
+    exercises:
+      - exercise: Barbell Bench Press
+        sets:
+          - count: 1
+            reps: 5
+            intensity:
+              type: load
+              value: 80
+              unit: kg
+            progression:
+              type: increment
+              cadence:
+                type: sessions
+                on_weekdays: [FRI]
+              by: 2.5
+
+  - id: squat-weekly
+    name: Squat Weekly (Every Other Week)
+    schedule:
+      type: weekdays
+      days: [MON]
+    exercises:
+      - exercise: Back Squat
+        sets:
+          - count: 1
+            reps: 5
+            intensity:
+              type: load
+              value: 150
+              unit: kg
+            progression:
+              type: increment
+              cadence:
+                type: weeks
+                every: 2
+              by: 5
+

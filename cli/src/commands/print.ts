@@ -65,7 +65,15 @@ export async function runPrintCommand(args: string[]): Promise<number> {
         const intensityText = set.intensity
           ? set.intensity.type === "load"
             ? ` @ ${set.intensity.value}${set.intensity.unit}`
-            : ` @ ${set.intensity.type} ${set.intensity.value}`
+            : set.intensity.type === "load_range"
+              ? ` @ [${set.intensity.min},${set.intensity.max}]${set.intensity.unit}`
+              : set.intensity.type === "percent_1rm"
+                ? ` @ ${set.intensity.value}%`
+                : set.intensity.type === "rpe"
+                  ? ` @ RPE${set.intensity.value}`
+                  : set.intensity.type === "rir"
+                    ? ` @ RIR${set.intensity.value}`
+                    : ""
           : "";
         console.log(`    set ${set.index}: ${repText}${intensityText}`);
       });

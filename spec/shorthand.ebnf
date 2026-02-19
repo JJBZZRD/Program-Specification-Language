@@ -4,11 +4,12 @@ shorthand       = set_block, [ws, intensity_clause] ;
 set_block       = integer, "x", reps ;
 reps            = integer | integer, "-", integer ;
 intensity_clause= "@", intensity ;
-intensity       = percent | rpe | rir | load ;
+intensity       = percent | rpe | rir | load | load_range ;
 percent         = number, "%" ;
 rpe             = ("RPE" | "rpe"), [ws], number ;
 rir             = ("RIR" | "rir"), [ws], number ;
 load            = number, [ws], unit ;
+load_range      = "[", number, [ws], ",", [ws], number, "]", [ws], unit ;
 unit            = "kg" | "KG" | "lb" | "LB" ;
 
 integer         = digit, {digit} ;

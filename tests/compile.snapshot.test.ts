@@ -51,6 +51,7 @@ export function run(): void {
       type: "percent_1rm",
       value: 80
     },
+    progression: undefined,
     note: undefined
   });
 
@@ -64,6 +65,7 @@ export function run(): void {
       type: "percent_1rm",
       value: 80
     },
+    progression: undefined,
     note: undefined
   });
 }

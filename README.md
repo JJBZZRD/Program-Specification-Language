@@ -30,9 +30,10 @@ On Windows PowerShell (when `npm.ps1` is blocked), use `npm.cmd`:
 npm.cmd run psl:dev -- validate examples/hypertrophy_4day.psl.yaml
 npm.cmd run psl:dev -- compile examples/hypertrophy_4day.psl.yaml --out out.compiled.json
 npm.cmd run psl:dev -- materialize examples/scheduling_demo.psl.yaml --out out.materialized.json
+npm.cmd run psl:dev -- materialize examples/progression_demo.psl.yaml --results examples/progression_demo.results.json --out out.progression_demo.materialized.json
 npm.cmd run psl:dev -- print examples/powerlifting_peak.psl.yaml
 ```
 
 ## Status
 
-This repository currently provides a v0.1 scaffold for the specification and a baseline TypeScript implementation skeleton.
+This repository provides a v0.1 specification and a working TypeScript reference implementation (parse/validate/compile/materialize), including scheduling and basic progression (`weekly_increment`).

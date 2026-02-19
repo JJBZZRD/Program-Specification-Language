@@ -169,6 +169,112 @@ export function run(): void {
     const result = validateAst({
       language_version: "0.1",
       metadata: {
+        id: "load-range-shorthand",
+        name: "Load Range Shorthand"
+      },
+      sessions: [
+        {
+          id: "day-1",
+          name: "Day 1",
+          day: 1,
+          exercises: [
+            {
+              exercise: "Deadlift",
+              sets: ["5x5 @[100,120]kg"]
+            }
+          ]
+        }
+      ]
+    });
+
+    assert.equal(result.valid, true);
+    assert.ok(result.value);
+    assert.deepStrictEqual(result.value.sessions[0]?.exercises[0]?.sets[0]?.intensity, {
+      type: "load_range",
+      min: 100,
+      max: 120,
+      unit: "kg"
+    });
+  }
+
+  {
+    const result = validateAst({
+      language_version: "0.1",
+      metadata: {
+        id: "load-range-object",
+        name: "Load Range Object"
+      },
+      sessions: [
+        {
+          id: "day-1",
+          name: "Day 1",
+          day: 1,
+          exercises: [
+            {
+              exercise: "Deadlift",
+              sets: [
+                {
+                  count: 3,
+                  reps: 3,
+                  intensity: {
+                    type: "load_range",
+                    min: 180,
+                    max: 200,
+                    unit: "kg"
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    });
+
+    assert.equal(result.valid, true);
+    assert.ok(result.value);
+  }
+
+  {
+    const result = validateAst({
+      language_version: "0.1",
+      metadata: {
+        id: "load-range-bad-order",
+        name: "Load Range Bad Order"
+      },
+      sessions: [
+        {
+          id: "day-1",
+          name: "Day 1",
+          day: 1,
+          exercises: [
+            {
+              exercise: "Deadlift",
+              sets: [
+                {
+                  count: 3,
+                  reps: 3,
+                  intensity: {
+                    type: "load_range",
+                    min: 200,
+                    max: 180,
+                    unit: "kg"
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    });
+
+    assert.equal(result.valid, false);
+    assert.equal(result.diagnostics[0]?.path, "$.sessions[0].exercises[0].sets[0].intensity.max");
+  }
+
+  {
+    const result = validateAst({
+      language_version: "0.1",
+      metadata: {
         id: "load-object",
         name: "Load Object"
       },
@@ -402,5 +508,278 @@ export function run(): void {
 
     assert.equal(result.valid, false);
     assert.equal(result.diagnostics[0]?.path, "$.sessions[0]");
+  }
+
+  {
+    const result = validateAst({
+      language_version: "0.1",
+      metadata: {
+        id: "progression-missing-calendar",
+        name: "Progression Missing Calendar"
+      },
+      sessions: [
+        {
+          id: "day-1",
+          name: "Day 1",
+          day: 1,
+          exercises: [
+            {
+              exercise: "Deadlift",
+              sets: [
+                {
+                  count: 1,
+                  reps: 5,
+                  intensity: { type: "load", value: 100, unit: "kg" },
+                  progression: { type: "weekly_increment", by: 2.5 }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    });
+
+    assert.equal(result.valid, false);
+    assert.equal(result.diagnostics[0]?.path, "$.calendar");
+  }
+
+  {
+    const result = validateAst({
+      language_version: "0.1",
+      metadata: {
+        id: "progression-valid",
+        name: "Progression Valid"
+      },
+      calendar: {
+        start_date: "2026-03-02"
+      },
+      sessions: [
+        {
+          id: "day-1",
+          name: "Day 1",
+          day: 1,
+          exercises: [
+            {
+              exercise: "Deadlift",
+              sets: [
+                {
+                  count: 1,
+                  reps: 5,
+                  intensity: { type: "load", value: 100, unit: "kg" },
+                  progression: {
+                    type: "weekly_increment",
+                    when: { type: "metric_vs_target", metric: "load", op: ">=", target: "value" },
+                    by: 2.5
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    });
+
+    assert.equal(result.valid, true);
+    assert.ok(result.value);
+
+    const set0 = result.value.sessions[0]?.exercises[0]?.sets[0];
+    assert.deepStrictEqual(set0?.progression, {
+      type: "weekly_increment",
+      when: { type: "metric_vs_target", metric: "load", op: ">=", target: "value" },
+      by: 2.5,
+      cadence: undefined
+    });
+  }
+
+  {
+    const result = validateAst({
+      language_version: "0.1",
+      metadata: {
+        id: "progression-missing-intensity",
+        name: "Progression Missing Intensity"
+      },
+      calendar: {
+        start_date: "2026-03-02"
+      },
+      sessions: [
+        {
+          id: "day-1",
+          name: "Day 1",
+          day: 1,
+          exercises: [
+            {
+              exercise: "Deadlift",
+              sets: [
+                {
+                  count: 1,
+                  reps: 5,
+                  progression: { type: "weekly_increment", by: 2.5 }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    });
+
+    assert.equal(result.valid, false);
+    assert.equal(result.diagnostics[0]?.path, "$.sessions[0].exercises[0].sets[0].progression");
+  }
+
+  {
+    const result = validateAst({
+      language_version: "0.1",
+      metadata: {
+        id: "progression-load-range-target-value",
+        name: "Progression Load Range Target Value"
+      },
+      calendar: {
+        start_date: "2026-03-02"
+      },
+      sessions: [
+        {
+          id: "day-1",
+          name: "Day 1",
+          day: 1,
+          exercises: [
+            {
+              exercise: "Bench Press",
+              sets: [
+                {
+                  count: 1,
+                  reps: 5,
+                  intensity: { type: "load_range", min: 80, max: 90, unit: "kg" },
+                  progression: {
+                    type: "weekly_increment",
+                    when: { type: "metric_vs_target", metric: "load", op: ">=", target: "value" },
+                    by: 2.5
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    });
+
+    assert.equal(result.valid, false);
+    assert.equal(result.diagnostics[0]?.path, "$.sessions[0].exercises[0].sets[0].progression.when.target");
+  }
+
+  {
+    const result = validateAst({
+      language_version: "0.1",
+      metadata: {
+        id: "progression-shorthand-wrapper",
+        name: "Progression Shorthand Wrapper"
+      },
+      calendar: {
+        start_date: "2026-03-02"
+      },
+      sessions: [
+        {
+          id: "day-1",
+          name: "Day 1",
+          day: 1,
+          exercises: [
+            {
+              exercise: "Deadlift",
+              sets: [
+                {
+                  shorthand: "1x5 @100kg",
+                  progression: { type: "weekly_increment", by: 2.5 }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    });
+
+    assert.equal(result.valid, true);
+    assert.ok(result.value);
+    assert.equal(result.value.sessions[0]?.exercises[0]?.sets[0]?.intensity?.type, "load");
+    assert.equal(result.value.sessions[0]?.exercises[0]?.sets[0]?.progression?.type, "weekly_increment");
+  }
+
+  {
+    const result = validateAst({
+      language_version: "0.1",
+      metadata: {
+        id: "increment-missing-cadence",
+        name: "Increment Missing Cadence"
+      },
+      calendar: {
+        start_date: "2026-03-02"
+      },
+      sessions: [
+        {
+          id: "day-1",
+          name: "Day 1",
+          day: 1,
+          exercises: [
+            {
+              exercise: "Deadlift",
+              sets: [
+                {
+                  count: 1,
+                  reps: 5,
+                  intensity: { type: "load", value: 100, unit: "kg" },
+                  progression: { type: "increment", by: 2.5 }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    });
+
+    assert.equal(result.valid, false);
+    assert.equal(result.diagnostics[0]?.path, "$.sessions[0].exercises[0].sets[0].progression.cadence");
+  }
+
+  {
+    const result = validateAst({
+      language_version: "0.1",
+      metadata: {
+        id: "increment-sessions-every-3",
+        name: "Increment Sessions Every 3"
+      },
+      calendar: {
+        start_date: "2026-03-02",
+        end_date: "2026-03-14"
+      },
+      sessions: [
+        {
+          id: "bench",
+          name: "Bench",
+          schedule: {
+            type: "interval_days",
+            every: 4
+          },
+          exercises: [
+            {
+              exercise: "Barbell Bench Press",
+              sets: [
+                {
+                  count: 1,
+                  reps: 5,
+                  intensity: { type: "load", value: 100, unit: "kg" },
+                  progression: {
+                    type: "increment",
+                    cadence: { type: "sessions", every: 3 },
+                    by: 2.5
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    });
+
+    assert.equal(result.valid, true);
+    assert.ok(result.value);
+    assert.equal(result.value.sessions[0]?.exercises[0]?.sets[0]?.progression?.type, "increment");
   }
 }

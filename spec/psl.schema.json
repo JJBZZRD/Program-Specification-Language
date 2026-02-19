@@ -1,4 +1,4 @@
-﻿{
+{
     "$schema":  "https://json-schema.org/draft/2020-12/schema",
     "$id":  "https://psl.dev/spec/psl.schema.json",
     "title":  "Program Specification Language AST",
@@ -258,6 +258,28 @@
                                                                    "intensity":  {
                                                                                      "$ref":  "#/$defs/intensity"
                                                                                  },
+                                                                   "progression":  {
+                                                                                      "$ref":  "#/$defs/progression"
+                                                                                  },
+                                                                   "note":  {
+                                                                                "type":  "string"
+                                                                            }
+                                                               }
+                                            },
+                                            {
+                                                "type":  "object",
+                                                "required":  [
+                                                                 "shorthand"
+                                                             ],
+                                                "additionalProperties":  false,
+                                                "properties":  {
+                                                                   "shorthand":  {
+                                                                                   "type":  "string",
+                                                                                   "minLength":  1
+                                                                               },
+                                                                   "progression":  {
+                                                                                      "$ref":  "#/$defs/progression"
+                                                                                  },
                                                                    "note":  {
                                                                                 "type":  "string"
                                                                             }
@@ -265,6 +287,188 @@
                                             }
                                         ]
                           },
+                  "comparisonOp":  {
+                                       "type":  "string",
+                                       "enum":  [
+                                                    ">=",
+                                                    ">",
+                                                    "<=",
+                                                    "<",
+                                                    "==",
+                                                    "!="
+                                                ]
+                                   },
+                  "progressionCondition":  {
+                                               "oneOf":  [
+                                                             {
+                                                                 "type":  "object",
+                                                                 "required":  [
+                                                                                  "type"
+                                                                              ],
+                                                                 "additionalProperties":  false,
+                                                                 "properties":  {
+                                                                                    "type":  {
+                                                                                                 "const":  "session_success"
+                                                                                             },
+                                                                                    "equals":  {
+                                                                                                   "type":  "boolean"
+                                                                                               }
+                                                                                }
+                                                             },
+                                                             {
+                                                                 "type":  "object",
+                                                                 "required":  [
+                                                                                  "type",
+                                                                                  "metric",
+                                                                                  "op"
+                                                                              ],
+                                                                 "additionalProperties":  false,
+                                                                 "properties":  {
+                                                                                    "type":  {
+                                                                                                 "const":  "metric_vs_target"
+                                                                                             },
+                                                                                    "metric":  {
+                                                                                                   "type":  "string",
+                                                                                                   "enum":  [
+                                                                                                                "load",
+                                                                                                                "rpe",
+                                                                                                                "rir"
+                                                                                                            ]
+                                                                                               },
+                                                                                    "op":  {
+                                                                                               "$ref":  "#/$defs/comparisonOp"
+                                                                                           },
+                                                                                    "target":  {
+                                                                                                   "type":  "string",
+                                                                                                   "enum":  [
+                                                                                                                "value",
+                                                                                                                "min",
+                                                                                                                "max"
+                                                                                                            ]
+                                                                                               }
+                                                                                }
+                                                             }
+                                                         ]
+                                           },
+                  "weeklyIncrementBy":  {
+                                           "oneOf":  [
+                                                         {
+                                                             "type":  "number"
+                                                         },
+                                                         {
+                                                             "type":  "object",
+                                                             "additionalProperties":  false,
+                                                             "properties":  {
+                                                                                "min":  {
+                                                                                            "type":  "number"
+                                                                                        },
+                                                                                "max":  {
+                                                                                            "type":  "number"
+                                                                                        }
+                                                                            },
+                                                             "anyOf":  [
+                                                                           {
+                                                                               "required":  [
+                                                                                                "min"
+                                                                                            ]
+                                                                           },
+                                                                           {
+                                                                               "required":  [
+                                                                                                "max"
+                                                                                            ]
+                                                                           }
+                                                                       ]
+                                                         }
+                                                     ]
+                                       },
+                  "progressionCadence":  {
+                                            "oneOf":  [
+                                                          {
+                                                              "type":  "object",
+                                                              "required":  [
+                                                                               "type"
+                                                                           ],
+                                                              "additionalProperties":  false,
+                                                              "properties":  {
+                                                                                 "type":  {
+                                                                                              "const":  "weeks"
+                                                                                          },
+                                                                                 "every":  {
+                                                                                               "type":  "integer",
+                                                                                               "minimum":  1
+                                                                                           }
+                                                                             }
+                                                          },
+                                                          {
+                                                              "type":  "object",
+                                                              "required":  [
+                                                                               "type"
+                                                                           ],
+                                                              "additionalProperties":  false,
+                                                              "properties":  {
+                                                                                 "type":  {
+                                                                                              "const":  "sessions"
+                                                                                          },
+                                                                                 "every":  {
+                                                                                               "type":  "integer",
+                                                                                               "minimum":  1
+                                                                                           },
+                                                                                 "on_weekdays":  {
+                                                                                                     "type":  "array",
+                                                                                                     "minItems":  1,
+                                                                                                     "items":  {
+                                                                                                                   "$ref":  "#/$defs/weekday"
+                                                                                                               }
+                                                                                                 }
+                                                                             }
+                                                          }
+                                                      ]
+                                        },
+                  "progression":  {
+                                      "type":  "object",
+                                      "required":  [
+                                                       "type",
+                                                       "by"
+                                                   ],
+                                      "additionalProperties":  false,
+                                      "properties":  {
+                                                         "type":  {
+                                                                      "type":  "string",
+                                                                      "enum":  [
+                                                                                   "weekly_increment",
+                                                                                   "increment"
+                                                                               ]
+                                                                  },
+                                                         "when":  {
+                                                                      "$ref":  "#/$defs/progressionCondition"
+                                                                  },
+                                                         "cadence":  {
+                                                                         "$ref":  "#/$defs/progressionCadence"
+                                                                     },
+                                                         "by":  {
+                                                                    "$ref":  "#/$defs/weeklyIncrementBy"
+                                                                }
+                                                     },
+                                      "allOf":  [
+                                                    {
+                                                        "if":  {
+                                                                   "properties":  {
+                                                                                      "type":  {
+                                                                                                   "const":  "increment"
+                                                                                               }
+                                                                                  },
+                                                                   "required":  [
+                                                                                    "type"
+                                                                                ]
+                                                               },
+                                                        "then":  {
+                                                                     "required":  [
+                                                                                      "cadence"
+                                                                                  ]
+                                                                 }
+                                                    }
+                                                ]
+                                  },
                   "intensity":  {
                                     "oneOf":  [
                                                   {
@@ -337,6 +541,36 @@
                                                                                        "type":  "number",
                                                                                        "exclusiveMinimum":  0
                                                                                    },
+                                                                         "unit":  {
+                                                                                      "type":  "string",
+                                                                                      "enum":  [
+                                                                                                   "kg",
+                                                                                                   "lb"
+                                                                                               ]
+                                                                                  }
+                                                                     }
+                                                  },
+                                                  {
+                                                      "type":  "object",
+                                                      "required":  [
+                                                                       "type",
+                                                                       "min",
+                                                                       "max",
+                                                                       "unit"
+                                                                   ],
+                                                      "additionalProperties":  false,
+                                                      "properties":  {
+                                                                         "type":  {
+                                                                                      "const":  "load_range"
+                                                                                  },
+                                                                         "min":  {
+                                                                                     "type":  "number",
+                                                                                     "exclusiveMinimum":  0
+                                                                                 },
+                                                                         "max":  {
+                                                                                     "type":  "number",
+                                                                                     "exclusiveMinimum":  0
+                                                                                 },
                                                                          "unit":  {
                                                                                       "type":  "string",
                                                                                       "enum":  [

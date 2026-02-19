@@ -1,0 +1,348 @@
+{
+  "language_version": "0.1",
+  "source_hash": "8d27b00b9c04bc2f904ecae92518253e18b150c47ee3355784d5011c1098461c",
+  "metadata": {
+    "id": "progression-demo",
+    "name": "Progression Demo",
+    "description": "Weekly progression driven by completion results."
+  },
+  "calendar": {
+    "start_date": "2026-03-02",
+    "end_date": "2026-03-16"
+  },
+  "sessions": [
+    {
+      "id": "monday",
+      "name": "Monday Progression",
+      "day": 1,
+      "schedule": {
+        "type": "weekdays",
+        "days": [
+          "MON"
+        ]
+      },
+      "exercises": [
+        {
+          "exercise": "Deadlift",
+          "sets": [
+            {
+              "index": 1,
+              "reps": {
+                "min": 5,
+                "max": 5
+              },
+              "intensity": {
+                "type": "load",
+                "value": 100,
+                "unit": "kg"
+              },
+              "progression": {
+                "type": "weekly_increment",
+                "when": {
+                  "type": "metric_vs_target",
+                  "metric": "load",
+                  "op": ">=",
+                  "target": "value"
+                },
+                "by": 2.5
+              }
+            }
+          ]
+        },
+        {
+          "exercise": "Barbell Bench Press",
+          "sets": [
+            {
+              "index": 1,
+              "reps": {
+                "min": 5,
+                "max": 5
+              },
+              "intensity": {
+                "type": "load_range",
+                "min": 80,
+                "max": 90,
+                "unit": "kg"
+              },
+              "progression": {
+                "type": "weekly_increment",
+                "when": {
+                  "type": "metric_vs_target",
+                  "metric": "load",
+                  "op": ">=",
+                  "target": "max"
+                },
+                "by": 2.5
+              }
+            }
+          ]
+        },
+        {
+          "exercise": "Pull-Up",
+          "sets": [
+            {
+              "index": 1,
+              "reps": {
+                "min": 8,
+                "max": 8
+              },
+              "intensity": {
+                "type": "rpe",
+                "value": 8
+              },
+              "progression": {
+                "type": "weekly_increment",
+                "by": 0.5
+              }
+            }
+          ]
+        },
+        {
+          "exercise": "Lateral Raise",
+          "sets": [
+            {
+              "index": 1,
+              "reps": {
+                "min": 12,
+                "max": 12
+              },
+              "intensity": {
+                "type": "rir",
+                "value": 2
+              },
+              "progression": {
+                "type": "weekly_increment",
+                "by": -0.5
+              }
+            }
+          ]
+        }
+      ],
+      "date_iso": "2026-03-02",
+      "occurrence": 1,
+      "sequence": 1
+    },
+    {
+      "id": "monday",
+      "name": "Monday Progression",
+      "day": 8,
+      "schedule": {
+        "type": "weekdays",
+        "days": [
+          "MON"
+        ]
+      },
+      "exercises": [
+        {
+          "exercise": "Deadlift",
+          "sets": [
+            {
+              "index": 1,
+              "reps": {
+                "min": 5,
+                "max": 5
+              },
+              "intensity": {
+                "type": "load",
+                "value": 102.5,
+                "unit": "kg"
+              },
+              "progression": {
+                "type": "weekly_increment",
+                "when": {
+                  "type": "metric_vs_target",
+                  "metric": "load",
+                  "op": ">=",
+                  "target": "value"
+                },
+                "by": 2.5
+              }
+            }
+          ]
+        },
+        {
+          "exercise": "Barbell Bench Press",
+          "sets": [
+            {
+              "index": 1,
+              "reps": {
+                "min": 5,
+                "max": 5
+              },
+              "intensity": {
+                "type": "load_range",
+                "min": 82.5,
+                "max": 92.5,
+                "unit": "kg"
+              },
+              "progression": {
+                "type": "weekly_increment",
+                "when": {
+                  "type": "metric_vs_target",
+                  "metric": "load",
+                  "op": ">=",
+                  "target": "max"
+                },
+                "by": 2.5
+              }
+            }
+          ]
+        },
+        {
+          "exercise": "Pull-Up",
+          "sets": [
+            {
+              "index": 1,
+              "reps": {
+                "min": 8,
+                "max": 8
+              },
+              "intensity": {
+                "type": "rpe",
+                "value": 8.5
+              },
+              "progression": {
+                "type": "weekly_increment",
+                "by": 0.5
+              }
+            }
+          ]
+        },
+        {
+          "exercise": "Lateral Raise",
+          "sets": [
+            {
+              "index": 1,
+              "reps": {
+                "min": 12,
+                "max": 12
+              },
+              "intensity": {
+                "type": "rir",
+                "value": 1.5
+              },
+              "progression": {
+                "type": "weekly_increment",
+                "by": -0.5
+              }
+            }
+          ]
+        }
+      ],
+      "date_iso": "2026-03-09",
+      "occurrence": 2,
+      "sequence": 2
+    },
+    {
+      "id": "monday",
+      "name": "Monday Progression",
+      "day": 15,
+      "schedule": {
+        "type": "weekdays",
+        "days": [
+          "MON"
+        ]
+      },
+      "exercises": [
+        {
+          "exercise": "Deadlift",
+          "sets": [
+            {
+              "index": 1,
+              "reps": {
+                "min": 5,
+                "max": 5
+              },
+              "intensity": {
+                "type": "load",
+                "value": 105,
+                "unit": "kg"
+              },
+              "progression": {
+                "type": "weekly_increment",
+                "when": {
+                  "type": "metric_vs_target",
+                  "metric": "load",
+                  "op": ">=",
+                  "target": "value"
+                },
+                "by": 2.5
+              }
+            }
+          ]
+        },
+        {
+          "exercise": "Barbell Bench Press",
+          "sets": [
+            {
+              "index": 1,
+              "reps": {
+                "min": 5,
+                "max": 5
+              },
+              "intensity": {
+                "type": "load_range",
+                "min": 85,
+                "max": 95,
+                "unit": "kg"
+              },
+              "progression": {
+                "type": "weekly_increment",
+                "when": {
+                  "type": "metric_vs_target",
+                  "metric": "load",
+                  "op": ">=",
+                  "target": "max"
+                },
+                "by": 2.5
+              }
+            }
+          ]
+        },
+        {
+          "exercise": "Pull-Up",
+          "sets": [
+            {
+              "index": 1,
+              "reps": {
+                "min": 8,
+                "max": 8
+              },
+              "intensity": {
+                "type": "rpe",
+                "value": 9
+              },
+              "progression": {
+                "type": "weekly_increment",
+                "by": 0.5
+              }
+            }
+          ]
+        },
+        {
+          "exercise": "Lateral Raise",
+          "sets": [
+            {
+              "index": 1,
+              "reps": {
+                "min": 12,
+                "max": 12
+              },
+              "intensity": {
+                "type": "rir",
+                "value": 1
+              },
+              "progression": {
+                "type": "weekly_increment",
+                "by": -0.5
+              }
+            }
+          ]
+        }
+      ],
+      "date_iso": "2026-03-16",
+      "occurrence": 3,
+      "sequence": 3
+    }
+  ]
+}
