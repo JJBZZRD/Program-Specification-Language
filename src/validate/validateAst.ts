@@ -17,7 +17,7 @@
   Weekday
 } from "../ast/types.js";
 import { CURRENT_LANGUAGE_VERSION } from "../ast/version.js";
-import { parseShorthand } from "../parse/parseShorthand.js";
+import { parseIntensityExpression, parseRepTargetExpression, parseShorthand } from "../parse/parseShorthand.js";
 import type { Diagnostic, ValidationResult } from "./diagnostics.js";
 
 type UnknownRecord = Record<string, unknown>;
@@ -27,8 +27,64 @@ const WEEKDAYS: readonly Weekday[] = ["MON", "TUE", "WED", "THU", "FRI", "SAT", 
 const WEEKDAY_SET = new Set<string>(WEEKDAYS);
 const COMPARISON_OP_SET = new Set<string>([">=", ">", "<=", "<", "==", "!="]);
 
+const WEEKDAY_ALIASES = new Map<string, Weekday>([
+  ["MON", "MON"],
+  ["MONDAY", "MON"],
+  ["TUE", "TUE"],
+  ["TUES", "TUE"],
+  ["TUESDAY", "TUE"],
+  ["WED", "WED"],
+  ["WEDNESDAY", "WED"],
+  ["THU", "THU"],
+  ["THUR", "THU"],
+  ["THURS", "THU"],
+  ["THURSDAY", "THU"],
+  ["FRI", "FRI"],
+  ["FRIDAY", "FRI"],
+  ["SAT", "SAT"],
+  ["SATURDAY", "SAT"],
+  ["SUN", "SUN"],
+  ["SUNDAY", "SUN"]
+]);
+
 function isRecord(value: unknown): value is UnknownRecord {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function parseWeekdayToken(raw: string): Weekday | undefined {
+  const token = raw.trim().toUpperCase();
+  if (token === "") {
+    return undefined;
+  }
+  return WEEKDAY_ALIASES.get(token);
+}
+
+function parseWeekdayList(raw: string): { days: Weekday[]; unknown: string[] } {
+  const unknown: string[] = [];
+  const days: Weekday[] = [];
+
+  raw
+    .split(/[\s,\/]+/)
+    .map((token) => token.trim())
+    .filter((token) => token !== "")
+    .forEach((token) => {
+      const upper = token.toUpperCase();
+      if (upper === "AND" || upper === "&") {
+        return;
+      }
+
+      const parsed = parseWeekdayToken(token);
+      if (!parsed) {
+        unknown.push(token);
+        return;
+      }
+
+      if (!days.includes(parsed)) {
+        days.push(parsed);
+      }
+    });
+
+  return { days, unknown };
 }
 
 function addError(diagnostics: Diagnostic[], path: string, message: string): void {
@@ -61,6 +117,149 @@ function parseIsoDate(value: unknown, path: string, diagnostics: Diagnostic[]): 
   }
 
   return value;
+}
+
+function parseDurationSecondsString(raw: string): number | undefined {
+  const normalized = raw.trim().toLowerCase();
+  if (normalized === "") {
+    return undefined;
+  }
+
+  // mm:ss
+  const mmssMatch = normalized.match(/^(?<min>\d+)\s*:\s*(?<sec>\d{2})$/);
+  if (mmssMatch?.groups?.min !== undefined && mmssMatch.groups.sec !== undefined) {
+    const min = Number(mmssMatch.groups.min);
+    const sec = Number(mmssMatch.groups.sec);
+    if (!Number.isFinite(min) || !Number.isFinite(sec) || min < 0 || sec < 0 || sec >= 60) {
+      return undefined;
+    }
+    return min * 60 + sec;
+  }
+
+  // 2m30s / 2m 30s / 2m
+  const minutesSecondsMatch = normalized.match(
+    /^(?<min>\d+(?:\.\d+)?)\s*m(?:\s*(?<sec>\d+(?:\.\d+)?)\s*s)?$/
+  );
+  if (minutesSecondsMatch?.groups?.min !== undefined) {
+    const minutes = Number(minutesSecondsMatch.groups.min);
+    const seconds = minutesSecondsMatch.groups.sec ? Number(minutesSecondsMatch.groups.sec) : 0;
+
+    if (!Number.isFinite(minutes) || !Number.isFinite(seconds) || minutes < 0 || seconds < 0) {
+      return undefined;
+    }
+
+    const total = minutes * 60 + seconds;
+    if (!Number.isFinite(total)) {
+      return undefined;
+    }
+
+    const rounded = Math.round(total);
+    // Only accept values that are effectively whole seconds.
+    if (Math.abs(total - rounded) > 1e-9) {
+      return undefined;
+    }
+
+    return rounded;
+  }
+
+  const secondsMatch = normalized.match(/^(?<sec>\d+(?:\.\d+)?)\s*s(?:ec(?:onds?)?)?$/);
+  if (secondsMatch?.groups?.sec !== undefined) {
+    const seconds = Number(secondsMatch.groups.sec);
+    if (!Number.isFinite(seconds) || seconds < 0) {
+      return undefined;
+    }
+
+    const rounded = Math.round(seconds);
+    if (Math.abs(seconds - rounded) > 1e-9) {
+      return undefined;
+    }
+
+    return rounded;
+  }
+
+  const minutesMatch = normalized.match(/^(?<min>\d+(?:\.\d+)?)\s*m(?:in(?:utes?)?)?$/);
+  if (minutesMatch?.groups?.min !== undefined) {
+    const minutes = Number(minutesMatch.groups.min);
+    if (!Number.isFinite(minutes) || minutes < 0) {
+      return undefined;
+    }
+
+    const total = minutes * 60;
+    const rounded = Math.round(total);
+    if (Math.abs(total - rounded) > 1e-9) {
+      return undefined;
+    }
+
+    return rounded;
+  }
+
+  if (/^\d+$/.test(normalized)) {
+    const seconds = Number(normalized);
+    if (!Number.isFinite(seconds)) {
+      return undefined;
+    }
+    return seconds;
+  }
+
+  return undefined;
+}
+
+function parseDurationSeconds(value: unknown, path: string, diagnostics: Diagnostic[]): number | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (typeof value === "number") {
+    if (!Number.isInteger(value) || value < 0) {
+      addError(diagnostics, path, "Duration must be an integer >= 0 (seconds).");
+      return undefined;
+    }
+    return value;
+  }
+
+  if (typeof value === "string") {
+    const seconds = parseDurationSecondsString(value);
+    if (seconds === undefined) {
+      addError(
+        diagnostics,
+        path,
+        "Duration must be seconds (integer) or a string like 90s, 2m, 2m30s, or 2:30."
+      );
+      return undefined;
+    }
+
+    return seconds;
+  }
+
+  addError(diagnostics, path, "Duration must be seconds (integer) or a duration string.");
+  return undefined;
+}
+
+function isRestDirectiveLine(raw: string): boolean {
+  const match = /^rest\b\s*[:=]?\s*(?<dur>.+)$/i.exec(raw.trim());
+  if (!match?.groups?.dur) {
+    return false;
+  }
+
+  return /^\d/.test(match.groups.dur.trim());
+}
+
+function parseRestDirectiveSeconds(
+  raw: string,
+  path: string,
+  diagnostics: Diagnostic[]
+): number | undefined | null {
+  const match = /^rest\b\s*[:=]?\s*(?<dur>.+)$/i.exec(raw.trim());
+  if (!match?.groups?.dur) {
+    return null;
+  }
+
+  const dur = match.groups.dur.trim();
+  if (dur === "" || !/^\d/.test(dur)) {
+    return null;
+  }
+
+  return parseDurationSeconds(dur, path, diagnostics);
 }
 
 function parseCalendar(
@@ -117,6 +316,16 @@ function parseRepTarget(reps: unknown, path: string, diagnostics: Diagnostic[]):
     return reps;
   }
 
+  if (typeof reps === "string") {
+    try {
+      return parseRepTargetExpression(reps);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Invalid reps shorthand.";
+      addError(diagnostics, path, message);
+      return undefined;
+    }
+  }
+
   if (!isRecord(reps)) {
     addError(diagnostics, path, "Reps must be an integer or an object range {min,max}.");
     return undefined;
@@ -145,6 +354,17 @@ function parseIntensity(
 ): IntensityTarget | undefined {
   if (intensity === undefined) {
     return undefined;
+  }
+
+  if (typeof intensity === "string") {
+    try {
+      // Allow intensity fields to reuse the set shorthand intensity syntax (with or without leading "@").
+      return parseIntensity(parseIntensityExpression(intensity), path, diagnostics);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Invalid intensity shorthand.";
+      addError(diagnostics, path, message);
+      return undefined;
+    }
   }
 
   if (!isRecord(intensity)) {
@@ -452,6 +672,249 @@ function parseProgressionCadence(
   };
 }
 
+function parseProgressionShorthand(
+  progression: string,
+  intensity: IntensityTarget,
+  path: string,
+  diagnostics: Diagnostic[]
+): UnknownRecord | undefined {
+  const normalized = progression.trim().replace(/\s+/g, " ");
+  if (normalized === "") {
+    addError(diagnostics, path, "progression shorthand cannot be empty.");
+    return undefined;
+  }
+
+  const ifMatch = /\bif\b/i.exec(normalized);
+  const main = ifMatch ? normalized.slice(0, ifMatch.index).trim() : normalized;
+  const conditionRaw = ifMatch ? normalized.slice(ifMatch.index + ifMatch[0].length).trim() : undefined;
+
+  if (main === "") {
+    addError(diagnostics, path, "progression shorthand must start with an increment (e.g. +2.5).");
+    return undefined;
+  }
+
+  const byRangeMatch =
+    /^\s*(?<sign>[+-])?\s*\[\s*(?<min>\d+(?:\.\d+)?)\s*(?:,\s*(?<max>\d+(?:\.\d+)?)\s*)?\]\s*(?<unit>kg|kgs|lb|lbs)?/i.exec(
+      main
+    );
+
+  let by: WeeklyIncrementBy | undefined;
+  let byUnit: LoadUnit | undefined;
+  let consumed = 0;
+
+  if (byRangeMatch?.groups?.min !== undefined) {
+    const sign = byRangeMatch.groups.sign === "-" ? -1 : 1;
+    const min = Number(byRangeMatch.groups.min) * sign;
+    const max =
+      byRangeMatch.groups.max !== undefined ? Number(byRangeMatch.groups.max) * sign : undefined;
+
+    if (!Number.isFinite(min) || (max !== undefined && !Number.isFinite(max))) {
+      addError(diagnostics, path, "Invalid progression increment.");
+      return undefined;
+    }
+
+    if (intensity.type !== "load_range") {
+      addError(diagnostics, path, "Bracketed progression increments are only valid for load_range intensity.");
+      return undefined;
+    }
+
+    by = max === undefined ? min : { min, max };
+
+    if (byRangeMatch.groups.unit) {
+      const unitToken = byRangeMatch.groups.unit.toLowerCase();
+      byUnit = unitToken === "kg" || unitToken === "kgs" ? "kg" : "lb";
+    }
+
+    consumed = byRangeMatch[0].length;
+  } else {
+    const byMatch =
+      /^\s*(?<sign>[+-])?\s*(?<value>\d+(?:\.\d+)?)\s*(?<unit>kg|kgs|lb|lbs)?/i.exec(main);
+
+    if (!byMatch?.groups?.value) {
+      addError(diagnostics, path, "progression shorthand must start with an increment (e.g. +2.5).");
+      return undefined;
+    }
+
+    const sign = byMatch.groups.sign === "-" ? -1 : 1;
+    const value = Number(byMatch.groups.value) * sign;
+
+    if (!Number.isFinite(value)) {
+      addError(diagnostics, path, "Invalid progression increment.");
+      return undefined;
+    }
+
+    by = value;
+
+    if (byMatch.groups.unit) {
+      const unitToken = byMatch.groups.unit.toLowerCase();
+      byUnit = unitToken === "kg" || unitToken === "kgs" ? "kg" : "lb";
+    }
+
+    consumed = byMatch[0].length;
+  }
+
+  if (byUnit !== undefined) {
+    if (intensity.type !== "load" && intensity.type !== "load_range") {
+      addError(diagnostics, path, "Units in progression shorthand are only valid for load/load_range intensity.");
+      return undefined;
+    }
+
+    if (intensity.unit !== byUnit) {
+      addError(diagnostics, path, `Progression unit ${byUnit} does not match intensity unit ${intensity.unit}.`);
+      return undefined;
+    }
+  }
+
+  let remainder = main.slice(consumed).trim();
+
+  // Optional weekday filter suffix: "on FRI" / "only Friday"
+  let onWeekdays: Weekday[] | undefined;
+  const onMatch = /\b(?:on|only)\s+(?<days>[A-Za-z,\s/]+)$/i.exec(remainder);
+  if (onMatch?.groups?.days !== undefined) {
+    const parsedDays = parseWeekdayList(onMatch.groups.days);
+    if (parsedDays.unknown.length > 0) {
+      addError(diagnostics, path, `Invalid weekday(s) in progression shorthand: ${parsedDays.unknown.join(", ")}.`);
+      return undefined;
+    }
+
+    if (parsedDays.days.length > 0) {
+      onWeekdays = parsedDays.days;
+      remainder = remainder.slice(0, onMatch.index).trim();
+    }
+  }
+
+  // Default cadence: weekly.
+  let cadenceType: "weeks" | "sessions" = "weeks";
+  let cadenceEvery = 1;
+
+  if (remainder !== "") {
+    const slashCadence = /^\/\s*(?<every>\d+)?\s*(?<unit>w|weeks?|s|sessions?)\s*$/i.exec(remainder);
+    if (slashCadence?.groups?.unit !== undefined) {
+      const unit = slashCadence.groups.unit.toLowerCase();
+      cadenceType = unit.startsWith("w") ? "weeks" : "sessions";
+      cadenceEvery = slashCadence.groups.every ? Number(slashCadence.groups.every) : 1;
+    } else {
+      const otherCadence = /^(?:every\s+)?other\s+(?<unit>week|weeks|w|session|sessions|s)$/i.exec(remainder);
+      if (otherCadence?.groups?.unit !== undefined) {
+        const unit = otherCadence.groups.unit.toLowerCase();
+        cadenceType = unit.startsWith("w") ? "weeks" : "sessions";
+        cadenceEvery = 2;
+      } else {
+        const cadenceMatch =
+          /^(?:every\s+)?(?<every>\d+)?\s*(?<unit>week|weeks|w|session|sessions|s)$/i.exec(remainder);
+        if (cadenceMatch?.groups?.unit !== undefined) {
+          const unit = cadenceMatch.groups.unit.toLowerCase();
+          cadenceType = unit.startsWith("w") ? "weeks" : "sessions";
+          cadenceEvery = cadenceMatch.groups.every ? Number(cadenceMatch.groups.every) : 1;
+        } else if (/^weekly$/i.test(remainder)) {
+          cadenceType = "weeks";
+          cadenceEvery = 1;
+        } else {
+          addError(
+            diagnostics,
+            path,
+            'Invalid progression cadence shorthand. Use e.g. "every week", "every 2 weeks", "every 3 sessions", or "/3s".'
+          );
+          return undefined;
+        }
+      }
+    }
+
+    if (!Number.isInteger(cadenceEvery) || cadenceEvery < 1) {
+      addError(diagnostics, path, "progression cadence must be an integer >= 1.");
+      return undefined;
+    }
+  }
+
+  if (onWeekdays && cadenceType === "weeks") {
+    // A weekday filter implies session-based cadence (e.g. "every 2 weeks on Fri" => "every 2 Fri occurrences").
+    cadenceType = "sessions";
+  }
+
+  const cadence: UnknownRecord =
+    cadenceType === "weeks"
+      ? { type: "weeks", every: cadenceEvery }
+      : { type: "sessions", every: cadenceEvery, on_weekdays: onWeekdays };
+
+  let when: UnknownRecord | undefined;
+
+  if (conditionRaw !== undefined) {
+    const condition = conditionRaw.trim();
+    if (condition === "") {
+      addError(diagnostics, path, "progression shorthand if-clause cannot be empty.");
+      return undefined;
+    }
+
+    if (/^(success|succeeded|pass|passed)$/i.test(condition)) {
+      when = { type: "session_success", equals: true };
+    } else if (/^(fail|failed|failure)$/i.test(condition)) {
+      when = { type: "session_success", equals: false };
+    } else {
+      const metricOpTarget =
+        /^(?<metric>load|rpe|rir)\s*(?<op>>=|>|<=|<|==|!=)\s*(?<target>target|value|min|max)?$/i.exec(condition);
+
+      const opTargetOnly =
+        /^(?<op>>=|>|<=|<|==|!=)\s*(?<target>target|value|min|max)?$/i.exec(condition);
+
+      const metric =
+        metricOpTarget?.groups?.metric !== undefined
+          ? metricOpTarget.groups.metric.toLowerCase()
+          : undefined;
+      const op =
+        metricOpTarget?.groups?.op !== undefined ? metricOpTarget.groups.op : opTargetOnly?.groups?.op;
+      const targetRaw =
+        metricOpTarget?.groups?.target !== undefined ? metricOpTarget.groups.target : opTargetOnly?.groups?.target;
+
+      let inferredMetric = metric;
+      if (!inferredMetric) {
+        if (intensity.type === "load" || intensity.type === "load_range") {
+          inferredMetric = "load";
+        } else if (intensity.type === "rpe") {
+          inferredMetric = "rpe";
+        } else if (intensity.type === "rir") {
+          inferredMetric = "rir";
+        } else {
+          addError(diagnostics, path, "Cannot infer metric for progression condition with percent_1rm intensity.");
+          return undefined;
+        }
+      }
+
+      if (!op || !COMPARISON_OP_SET.has(op)) {
+        addError(diagnostics, path, "Invalid progression condition operator. Use one of: >=, >, <=, <, ==, !=.");
+        return undefined;
+      }
+
+      let target: "value" | "min" | "max" | undefined;
+      if (targetRaw !== undefined) {
+        const token = targetRaw.toLowerCase();
+        if (token === "min") {
+          target = "min";
+        } else if (token === "max") {
+          target = "max";
+        } else if (token === "value") {
+          target = "value";
+        } else {
+          target = undefined;
+        }
+      }
+
+      when = {
+        type: "metric_vs_target",
+        metric: inferredMetric,
+        op,
+        ...(target ? { target } : {})
+      };
+    }
+  }
+
+  return {
+    type: "increment",
+    by,
+    cadence,
+    ...(when ? { when } : {})
+  };
+}
+
 function parseProgression(
   progression: unknown,
   intensity: IntensityTarget | undefined,
@@ -464,12 +927,26 @@ function parseProgression(
 
   const startIndex = diagnostics.length;
 
-  if (!isRecord(progression)) {
-    addError(diagnostics, path, "progression must be an object.");
+  let progressionValue: unknown = progression;
+
+  if (typeof progression === "string") {
+    if (!intensity) {
+      addError(diagnostics, path, "progression requires intensity.");
+      return undefined;
+    }
+
+    progressionValue = parseProgressionShorthand(progression, intensity, path, diagnostics);
+    if (progressionValue === undefined) {
+      return undefined;
+    }
+  }
+
+  if (!isRecord(progressionValue)) {
+    addError(diagnostics, path, "progression must be an object or shorthand string.");
     return undefined;
   }
 
-  const type = progression.type;
+  const type = progressionValue.type;
   if (type !== "weekly_increment" && type !== "increment") {
     addError(diagnostics, `${path}.type`, "progression.type must be weekly_increment or increment.");
     return undefined;
@@ -480,15 +957,15 @@ function parseProgression(
     return undefined;
   }
 
-  const when = parseProgressionCondition(progression.when, intensity, `${path}.when`, diagnostics);
-  const cadence = parseProgressionCadence(progression.cadence, `${path}.cadence`, diagnostics);
+  const when = parseProgressionCondition(progressionValue.when, intensity, `${path}.when`, diagnostics);
+  const cadence = parseProgressionCadence(progressionValue.cadence, `${path}.cadence`, diagnostics);
 
   if (type === "increment" && cadence === undefined) {
     addError(diagnostics, `${path}.cadence`, "increment progression requires cadence.");
     return undefined;
   }
 
-  const byRaw = progression.by;
+  const byRaw = progressionValue.by;
   if (byRaw === undefined) {
     addError(diagnostics, `${path}.by`, "weekly_increment progression requires by.");
     return undefined;
@@ -550,31 +1027,84 @@ function parseProgression(
   };
 }
 
+function parseSetShorthandBlock(raw: string, path: string, diagnostics: Diagnostic[]): SetPrescription[] {
+  const sets: SetPrescription[] = [];
+  const annotateLinePaths = /[\r\n]/.test(raw) || raw.includes(";");
+  const lines = raw.split(/\r?\n/);
+
+  lines.forEach((line, lineIndex) => {
+    const lineNumber = lineIndex + 1;
+    const trimmedLine = line.trim();
+
+    if (trimmedLine === "" || trimmedLine.startsWith("#")) {
+      return;
+    }
+
+    // Allow semicolon-separated entries (useful for one-line exercise shorthand).
+    const segments = trimmedLine.split(";");
+
+    segments.forEach((segment) => {
+      let entry = segment.trim();
+      if (entry === "" || entry.startsWith("#")) {
+        return;
+      }
+
+      // Strip a common bullet prefix (useful inside YAML block scalars).
+      entry = entry.replace(/^\-\s+/, "");
+
+      let note: string | undefined;
+      const hashIndex = entry.indexOf("#");
+      if (hashIndex >= 0) {
+        note = entry.slice(hashIndex + 1).trim();
+        entry = entry.slice(0, hashIndex).trim();
+      }
+
+      if (entry === "") {
+        return;
+      }
+
+      try {
+        const shorthand = parseShorthand(entry);
+        const linePath = annotateLinePaths ? `${path}[line ${lineNumber}]` : path;
+        const intensity = parseIntensity(shorthand.intensity, `${linePath}.intensity`, diagnostics);
+
+        if (shorthand.intensity !== undefined && intensity === undefined) {
+          return;
+        }
+
+        const setValue: SetPrescription = {
+          ...shorthand,
+          intensity
+        };
+
+        if (note && note !== "") {
+          setValue.note = note;
+        }
+
+        sets.push(setValue);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Invalid shorthand expression.";
+        addError(diagnostics, annotateLinePaths ? `${path}[line ${lineNumber}]` : path, message);
+      }
+    });
+  });
+
+  return sets;
+}
+
 function parseSet(
   set: unknown,
   path: string,
   diagnostics: Diagnostic[]
-): SetPrescription | undefined {
+): SetPrescription[] | undefined {
   const startIndex = diagnostics.length;
 
   if (typeof set === "string") {
-    try {
-      const shorthand = parseShorthand(set);
-      const intensity = parseIntensity(shorthand.intensity, `${path}.intensity`, diagnostics);
-
-      if (shorthand.intensity !== undefined && intensity === undefined) {
-        return undefined;
-      }
-
-      return {
-        ...shorthand,
-        intensity
-      };
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Invalid shorthand expression.";
-      addError(diagnostics, path, message);
+    const parsed = parseSetShorthandBlock(set, path, diagnostics);
+    if (hasNewErrors(diagnostics, startIndex)) {
       return undefined;
     }
+    return parsed;
   }
 
   if (!isRecord(set)) {
@@ -593,38 +1123,41 @@ function parseSet(
       return undefined;
     }
 
-    let shorthand: SetPrescription;
-    try {
-      shorthand = parseShorthand(shorthandRaw);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Invalid shorthand expression.";
-      addError(diagnostics, `${path}.shorthand`, message);
-      return undefined;
-    }
+    const shorthandSets = parseSetShorthandBlock(shorthandRaw, `${path}.shorthand`, diagnostics);
 
-    const intensity = parseIntensity(shorthand.intensity, `${path}.intensity`, diagnostics);
-
-    if (shorthand.intensity !== undefined && intensity === undefined) {
-      return undefined;
-    }
-
-    const progression = parseProgression(set.progression, intensity, `${path}.progression`, diagnostics);
-
-    const note = set.note;
-    if (note !== undefined && typeof note !== "string") {
+    const wrapperNote = set.note;
+    if (wrapperNote !== undefined && typeof wrapperNote !== "string") {
       addError(diagnostics, `${path}.note`, "Set note must be a string.");
     }
+
+    const expanded: SetPrescription[] = [];
+
+    shorthandSets.forEach((entry) => {
+      const intensity = entry.intensity;
+      const progression = parseProgression(set.progression, intensity, `${path}.progression`, diagnostics);
+
+      let note: string | undefined = wrapperNote as string | undefined;
+      if (entry.note) {
+        note = note ? `${note}; ${entry.note}` : entry.note;
+      }
+
+      const expandedSet: SetPrescription = {
+        ...entry,
+        progression
+      };
+
+      if (note !== undefined) {
+        expandedSet.note = note;
+      }
+
+      expanded.push(expandedSet);
+    });
 
     if (hasNewErrors(diagnostics, startIndex)) {
       return undefined;
     }
 
-    return {
-      ...shorthand,
-      intensity,
-      progression,
-      note: note as string | undefined
-    };
+    return expanded;
   }
 
   const count = set.count;
@@ -645,13 +1178,202 @@ function parseSet(
     return undefined;
   }
 
+  return [
+    {
+      count: count as number,
+      reps: reps as RepTarget,
+      intensity,
+      progression,
+      note: note as string | undefined
+    }
+  ];
+}
+
+function parseSets(
+  setsRaw: unknown,
+  path: string,
+  diagnostics: Diagnostic[]
+): SetPrescription[] | undefined {
+  if (typeof setsRaw === "string") {
+    return parseSetShorthandBlock(setsRaw, path, diagnostics);
+  }
+
+  if (Array.isArray(setsRaw)) {
+    const sets: SetPrescription[] = [];
+    setsRaw.forEach((value, index) => {
+      const parsed = parseSet(value, `${path}[${index}]`, diagnostics);
+      if (parsed) {
+        sets.push(...parsed);
+      }
+    });
+    return sets;
+  }
+
+  addError(diagnostics, path, "sets must be an array, a shorthand string, or a shorthand block string.");
+  return undefined;
+}
+
+function parseExerciseShorthand(
+  source: string,
+  path: string,
+  diagnostics: Diagnostic[]
+): ExercisePrescription | undefined {
+  const startIndex = diagnostics.length;
+
+  const lines = source.split(/\r?\n/);
+  const meaningful = lines
+    .map((line) => line.trim())
+    .filter((line) => line !== "" && !line.startsWith("#"))
+    .map((line) => line.replace(/^\-\s+/, ""));
+
+  if (meaningful.length === 0) {
+    addError(diagnostics, path, "Exercise shorthand cannot be empty.");
+    return undefined;
+  }
+
+  const first = meaningful[0]!;
+  const colonIndex = first.indexOf(":");
+  const pipeIndex = first.indexOf("|");
+  const splitIndex =
+    colonIndex >= 0 && pipeIndex >= 0 ? Math.min(colonIndex, pipeIndex) : Math.max(colonIndex, pipeIndex);
+
+  const name = splitIndex >= 0 ? first.slice(0, splitIndex).trim() : first.trim();
+  const firstRemainder = splitIndex >= 0 ? first.slice(splitIndex + 1).trim() : "";
+
+  if (name === "") {
+    addError(diagnostics, path, "Exercise shorthand must start with an exercise name.");
+    return undefined;
+  }
+
+  let restSeconds: number | undefined;
+  const setLines: string[] = [];
+
+  if (firstRemainder !== "") {
+    setLines.push(firstRemainder);
+  }
+
+  meaningful.slice(1).forEach((line) => {
+    const trimmed = line.trim();
+
+    const restDirective = parseRestDirectiveSeconds(trimmed, `${path}.rest_seconds`, diagnostics);
+    if (restDirective !== null) {
+      if (restDirective !== undefined) {
+        restSeconds = restDirective;
+      }
+      return;
+    }
+
+    setLines.push(trimmed);
+  });
+
+  // Pull out inline "rest ..." segments that may appear at the end of a semicolon-separated list.
+  const normalizedSetLines: string[] = [];
+  setLines.forEach((line) => {
+    line
+      .split(";")
+      .map((segment) => segment.trim())
+      .filter((segment) => segment !== "")
+      .forEach((segment) => {
+        const restDirective = parseRestDirectiveSeconds(segment, `${path}.rest_seconds`, diagnostics);
+        if (restDirective !== null) {
+          if (restDirective !== undefined) {
+            restSeconds = restDirective;
+          }
+          return;
+        }
+
+        normalizedSetLines.push(segment);
+      });
+  });
+
+  if (normalizedSetLines.length === 0) {
+    addError(
+      diagnostics,
+      path,
+      'Exercise shorthand must include at least one set line (e.g. "Bench Press: 5x5 @75%").'
+    );
+    return undefined;
+  }
+
+  const sets = parseSetShorthandBlock(normalizedSetLines.join("\n"), `${path}.sets`, diagnostics);
+
+  if (sets.length === 0) {
+    addError(diagnostics, `${path}.sets`, "Exercise shorthand produced no sets.");
+  }
+
+  if (hasNewErrors(diagnostics, startIndex)) {
+    return undefined;
+  }
+
   return {
-    count: count as number,
-    reps: reps as RepTarget,
-    intensity,
-    progression,
-    note: note as string | undefined
+    exercise: name,
+    sets,
+    rest_seconds: restSeconds
   };
+}
+
+function parseExercisesShorthandBlock(
+  source: string,
+  path: string,
+  diagnostics: Diagnostic[]
+): ExercisePrescription[] | undefined {
+  const startIndex = diagnostics.length;
+
+  const lines = source.split(/\r?\n/);
+  const exercises: ExercisePrescription[] = [];
+
+  let current: string[] = [];
+
+  function flush(): void {
+    if (current.length === 0) {
+      return;
+    }
+
+    const block = current.join("\n");
+    const parsed = parseExerciseShorthand(block, `${path}[${exercises.length}]`, diagnostics);
+    if (parsed) {
+      exercises.push(parsed);
+    }
+    current = [];
+  }
+
+  lines.forEach((line) => {
+    const trimmed = line.trim();
+    if (trimmed === "" || trimmed.startsWith("#")) {
+      return;
+    }
+
+    const content = trimmed.replace(/^\-\s+/, "");
+
+    const isSetLine = /^\d/.test(content);
+    const isRestLine = isRestDirectiveLine(content);
+    const isHeaderLine = !isSetLine && !isRestLine;
+
+    if (isHeaderLine) {
+      flush();
+      current.push(content);
+      return;
+    }
+
+    if (current.length === 0) {
+      addError(
+        diagnostics,
+        path,
+        'Exercise block shorthand must start with an exercise name line (e.g. "Bench Press:").'
+      );
+      return;
+    }
+
+    current.push(content);
+  });
+
+  flush();
+
+  if (hasNewErrors(diagnostics, startIndex)) {
+    return undefined;
+  }
+
+  return exercises;
 }
 
 function parseExercise(
@@ -661,8 +1383,12 @@ function parseExercise(
 ): ExercisePrescription | undefined {
   const startIndex = diagnostics.length;
 
+  if (typeof exercise === "string") {
+    return parseExerciseShorthand(exercise, path, diagnostics);
+  }
+
   if (!isRecord(exercise)) {
-    addError(diagnostics, path, "Exercise must be an object.");
+    addError(diagnostics, path, "Exercise must be an object or shorthand string.");
     return undefined;
   }
 
@@ -671,29 +1397,27 @@ function parseExercise(
     addError(diagnostics, `${path}.exercise`, "Exercise name is required.");
   }
 
-  const restSeconds = exercise.rest_seconds;
-  if (restSeconds !== undefined) {
-    if (typeof restSeconds !== "number" || !Number.isInteger(restSeconds) || restSeconds < 0) {
-      addError(diagnostics, `${path}.rest_seconds`, "rest_seconds must be an integer >= 0.");
-    }
+  const hasRestSeconds = exercise.rest_seconds !== undefined;
+  const hasRestAlias = exercise.rest !== undefined;
+
+  if (hasRestSeconds && hasRestAlias) {
+    addError(diagnostics, `${path}.rest_seconds`, "Specify either rest_seconds or rest, not both.");
+    addError(diagnostics, `${path}.rest`, "Specify either rest_seconds or rest, not both.");
   }
 
-  const setsRaw = exercise.sets;
-  const setsArray =
-    typeof setsRaw === "string" ? [setsRaw] : Array.isArray(setsRaw) ? setsRaw : undefined;
+  const restValue = hasRestAlias ? exercise.rest : exercise.rest_seconds;
+  const restSeconds = parseDurationSeconds(
+    restValue,
+    hasRestAlias ? `${path}.rest` : `${path}.rest_seconds`,
+    diagnostics
+  );
 
-  if (!setsArray || setsArray.length === 0) {
+  const sets = parseSets(exercise.sets, `${path}.sets`, diagnostics);
+
+  if (!sets || sets.length === 0) {
     addError(diagnostics, `${path}.sets`, "Exercise must include sets.");
     return undefined;
   }
-
-  const sets: SetPrescription[] = [];
-  setsArray.forEach((setValue, index) => {
-    const parsed = parseSet(setValue, `${path}.sets[${index}]`, diagnostics);
-    if (parsed) {
-      sets.push(parsed);
-    }
-  });
 
   if (hasNewErrors(diagnostics, startIndex)) {
     return undefined;
@@ -702,21 +1426,104 @@ function parseExercise(
   return {
     exercise: name as string,
     sets,
-    rest_seconds: restSeconds as number | undefined
+    rest_seconds: restSeconds
   };
 }
 
-function parseSchedule(
-  schedule: unknown,
+function parseScheduleShorthand(
+  schedule: string,
+  path: string,
+  diagnostics: Diagnostic[]
+): SessionSchedule | undefined {
+  let raw = schedule.trim();
+  if (raw === "") {
+    addError(diagnostics, path, "schedule shorthand cannot be empty.");
+    return undefined;
+  }
+
+  let startOffset: number | undefined;
+
+  const plusOffsetMatch = /\+\s*(?<offset>\d+)\s*$/i.exec(raw);
+  if (plusOffsetMatch?.groups?.offset !== undefined) {
+    startOffset = Number(plusOffsetMatch.groups.offset);
+    raw = raw.slice(0, plusOffsetMatch.index).trim();
+  } else {
+    const offsetMatch = /\boffset\s+(?<offset>\d+)\s*$/i.exec(raw);
+    if (offsetMatch?.groups?.offset !== undefined) {
+      startOffset = Number(offsetMatch.groups.offset);
+      raw = raw.slice(0, offsetMatch.index).trim();
+    }
+  }
+
+  if (startOffset !== undefined) {
+    if (!Number.isInteger(startOffset) || startOffset < 0) {
+      addError(diagnostics, path, "schedule start offset must be an integer >= 0.");
+      return undefined;
+    }
+  }
+
+  const normalized = raw.replace(/\s+/g, " ").trim();
+
+  if (/^every other day(s)?$/i.test(normalized)) {
+    return { type: "interval_days", every: 2, start_offset_days: startOffset };
+  }
+
+  if (/^every day(s)?$/i.test(normalized)) {
+    return { type: "interval_days", every: 1, start_offset_days: startOffset };
+  }
+
+  const intervalMatch = /^every\s+(?<every>\d+)\s*(?:d|day|days)$/i.exec(normalized);
+  if (intervalMatch?.groups?.every !== undefined) {
+    const every = Number(intervalMatch.groups.every);
+    if (!Number.isInteger(every) || every < 1) {
+      addError(diagnostics, path, "schedule interval must be an integer >= 1.");
+      return undefined;
+    }
+
+    return { type: "interval_days", every, start_offset_days: startOffset };
+  }
+
+  const shortIntervalMatch = /^(?<every>\d+)\s*(?:d|day|days)$/i.exec(normalized);
+  if (shortIntervalMatch?.groups?.every !== undefined) {
+    const every = Number(shortIntervalMatch.groups.every);
+    if (!Number.isInteger(every) || every < 1) {
+      addError(diagnostics, path, "schedule interval must be an integer >= 1.");
+      return undefined;
+    }
+
+    return { type: "interval_days", every, start_offset_days: startOffset };
+  }
+
+  const weekdaySource = normalized.replace(/^(?:on|every)\s+/i, "");
+  const parsed = parseWeekdayList(weekdaySource);
+
+  if (parsed.unknown.length > 0) {
+    addError(
+      diagnostics,
+      path,
+      `Invalid weekday(s) in schedule shorthand: ${parsed.unknown.join(", ")}.`
+    );
+    return undefined;
+  }
+
+  if (parsed.days.length === 0) {
+    addError(
+      diagnostics,
+      path,
+      'Invalid schedule shorthand. Use e.g. "every 4 days", "every other day", or "MON,FRI".'
+    );
+    return undefined;
+  }
+
+  return { type: "weekdays", days: parsed.days, start_offset_days: startOffset };
+}
+
+function parseScheduleObject(
+  schedule: UnknownRecord,
   path: string,
   diagnostics: Diagnostic[]
 ): SessionSchedule | undefined {
   const startIndex = diagnostics.length;
-
-  if (!isRecord(schedule)) {
-    addError(diagnostics, path, "schedule must be an object.");
-    return undefined;
-  }
 
   const type = schedule.type;
   if (type !== "interval_days" && type !== "weekdays") {
@@ -776,6 +1583,23 @@ function parseSchedule(
   };
 }
 
+function parseSchedule(
+  schedule: unknown,
+  path: string,
+  diagnostics: Diagnostic[]
+): SessionSchedule | undefined {
+  if (typeof schedule === "string") {
+    return parseScheduleShorthand(schedule, path, diagnostics);
+  }
+
+  if (!isRecord(schedule)) {
+    addError(diagnostics, path, "schedule must be an object or shorthand string.");
+    return undefined;
+  }
+
+  return parseScheduleObject(schedule, path, diagnostics);
+}
+
 function parseSession(
   session: unknown,
   path: string,
@@ -824,18 +1648,33 @@ function parseSession(
 
   const schedule = hasSchedule ? parseSchedule(session.schedule, `${path}.schedule`, diagnostics) : undefined;
 
-  if (!Array.isArray(session.exercises) || session.exercises.length === 0) {
-    addError(diagnostics, `${path}.exercises`, "Session must include exercises.");
+  const exercisesRaw = session.exercises;
+  const exercises: ExercisePrescription[] = [];
+
+  if (typeof exercisesRaw === "string") {
+    const parsed = parseExercisesShorthandBlock(exercisesRaw, `${path}.exercises`, diagnostics);
+    if (!parsed || parsed.length === 0) {
+      addError(diagnostics, `${path}.exercises`, "Session must include exercises.");
+      return undefined;
+    }
+
+    exercises.push(...parsed);
+  } else if (Array.isArray(exercisesRaw)) {
+    if (exercisesRaw.length === 0) {
+      addError(diagnostics, `${path}.exercises`, "Session must include exercises.");
+      return undefined;
+    }
+
+    exercisesRaw.forEach((exerciseValue, index) => {
+      const parsed = parseExercise(exerciseValue, `${path}.exercises[${index}]`, diagnostics);
+      if (parsed) {
+        exercises.push(parsed);
+      }
+    });
+  } else {
+    addError(diagnostics, `${path}.exercises`, "Session exercises must be an array or a shorthand block string.");
     return undefined;
   }
-
-  const exercises: ExercisePrescription[] = [];
-  session.exercises.forEach((exerciseValue, index) => {
-    const parsed = parseExercise(exerciseValue, `${path}.exercises[${index}]`, diagnostics);
-    if (parsed) {
-      exercises.push(parsed);
-    }
-  });
 
   if (hasNewErrors(diagnostics, startIndex)) {
     return undefined;

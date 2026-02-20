@@ -1,8 +1,8 @@
-﻿import type { IntensityTarget, LoadUnit, RepTarget, SetPrescription } from "../ast/types.js";
+import type { IntensityTarget, LoadUnit, RepTarget, SetPrescription } from "../ast/types.js";
 import { tokenizeShorthand } from "./tokenizer.js";
 
 const MAIN_PATTERN =
-  /^(?<count>\d+)x(?<repMin>\d+)(?:-(?<repMax>\d+))?(?:\s*@\s*(?<intensity>.+))?$/i;
+  /^(?<count>\d+)\s*x\s*(?<repMin>\d+)(?:\s*-\s*(?<repMax>\d+))?(?:\s*@\s*(?<intensity>.+))?$/i;
 
 export class ShorthandParseError extends Error {
   constructor(message: string) {
@@ -31,18 +31,44 @@ function parseReps(repMinRaw: string, repMaxRaw?: string): RepTarget {
   return { min: repMin, max: repMax };
 }
 
-function parseIntensity(raw: string): IntensityTarget {
+export function parseRepTargetExpression(raw: string): RepTarget {
   const normalized = raw.trim();
+  const match = normalized.match(/^(?<min>\d+)(?:\s*-\s*(?<max>\d+))?$/);
+
+  if (!match?.groups?.min) {
+    throw new ShorthandParseError(`Unsupported reps expression: ${raw}`);
+  }
+
+  return parseReps(match.groups.min, match.groups.max);
+}
+
+function normalizeLoadUnit(unitRaw: string): LoadUnit {
+  const unit = unitRaw.trim().toLowerCase();
+
+  if (unit === "kg" || unit === "kgs") {
+    return "kg";
+  }
+
+  if (unit === "lb" || unit === "lbs") {
+    return "lb";
+  }
+
+  throw new ShorthandParseError(`Unsupported load unit: ${unitRaw}`);
+}
+
+export function parseIntensityExpression(raw: string): IntensityTarget {
+  const normalized = raw.trim().replace(/^@+/, "").trim();
 
   const loadRangeMatch = normalized.match(
-    /^\[(?<min>\d+(?:\.\d+)?)\s*,\s*(?<max>\d+(?:\.\d+)?)\]\s*(?<unit>kg|lb)$/i
+    /^\[\s*(?<min>\d+(?:\.\d+)?)\s*,\s*(?<max>\d+(?:\.\d+)?)\s*\]\s*(?<unit>kg|kgs|lb|lbs)$/i
   );
+
   if (
     loadRangeMatch?.groups?.min !== undefined &&
     loadRangeMatch.groups.max !== undefined &&
     loadRangeMatch.groups.unit !== undefined
   ) {
-    const unit = loadRangeMatch.groups.unit.toLowerCase() as LoadUnit;
+    const unit = normalizeLoadUnit(loadRangeMatch.groups.unit);
     return {
       type: "load_range",
       min: Number(loadRangeMatch.groups.min),
@@ -51,24 +77,52 @@ function parseIntensity(raw: string): IntensityTarget {
     };
   }
 
-  const percentMatch = normalized.match(/^(?<value>\d+(?:\.\d+)?)%$/);
+  const hyphenLoadRangeMatch = normalized.match(
+    /^(?<min>\d+(?:\.\d+)?)\s*-\s*(?<max>\d+(?:\.\d+)?)\s*(?<unit>kg|kgs|lb|lbs)$/i
+  );
+
+  if (
+    hyphenLoadRangeMatch?.groups?.min !== undefined &&
+    hyphenLoadRangeMatch.groups.max !== undefined &&
+    hyphenLoadRangeMatch.groups.unit !== undefined
+  ) {
+    const unit = normalizeLoadUnit(hyphenLoadRangeMatch.groups.unit);
+    return {
+      type: "load_range",
+      min: Number(hyphenLoadRangeMatch.groups.min),
+      max: Number(hyphenLoadRangeMatch.groups.max),
+      unit
+    };
+  }
+
+  const percentMatch = normalized.match(/^(?<value>\d+(?:\.\d+)?)\s*%\s*(?:1\s*rm)?$/i);
   if (percentMatch?.groups?.value !== undefined) {
     return { type: "percent_1rm", value: Number(percentMatch.groups.value) };
   }
 
-  const rpeMatch = normalized.match(/^rpe\s*(?<value>\d+(?:\.\d+)?)$/i);
+  const rpeMatch = normalized.match(
+    /^(?:rpe\s*(?<value>\d+(?:\.\d+)?)|(?<value2>\d+(?:\.\d+)?)\s*rpe)$/i
+  );
   if (rpeMatch?.groups?.value !== undefined) {
     return { type: "rpe", value: Number(rpeMatch.groups.value) };
   }
+  if (rpeMatch?.groups?.value2 !== undefined) {
+    return { type: "rpe", value: Number(rpeMatch.groups.value2) };
+  }
 
-  const rirMatch = normalized.match(/^rir\s*(?<value>\d+(?:\.\d+)?)$/i);
+  const rirMatch = normalized.match(
+    /^(?:rir\s*(?<value>\d+(?:\.\d+)?)|(?<value2>\d+(?:\.\d+)?)\s*rir)$/i
+  );
   if (rirMatch?.groups?.value !== undefined) {
     return { type: "rir", value: Number(rirMatch.groups.value) };
   }
+  if (rirMatch?.groups?.value2 !== undefined) {
+    return { type: "rir", value: Number(rirMatch.groups.value2) };
+  }
 
-  const loadMatch = normalized.match(/^(?<value>\d+(?:\.\d+)?)\s*(?<unit>kg|lb)$/i);
+  const loadMatch = normalized.match(/^(?<value>\d+(?:\.\d+)?)\s*(?<unit>kg|kgs|lb|lbs)$/i);
   if (loadMatch?.groups?.value !== undefined && loadMatch.groups.unit !== undefined) {
-    const unit = loadMatch.groups.unit.toLowerCase() as LoadUnit;
+    const unit = normalizeLoadUnit(loadMatch.groups.unit);
     return { type: "load", value: Number(loadMatch.groups.value), unit };
   }
 
@@ -95,7 +149,7 @@ export function parseShorthand(input: string): SetPrescription {
 
   const reps = parseReps(match.groups.repMin, match.groups.repMax);
   const intensity =
-    match.groups.intensity !== undefined ? parseIntensity(match.groups.intensity) : undefined;
+    match.groups.intensity !== undefined ? parseIntensityExpression(match.groups.intensity) : undefined;
 
   return {
     count,
@@ -103,3 +157,4 @@ export function parseShorthand(input: string): SetPrescription {
     intensity
   };
 }
+

@@ -4,6 +4,7 @@
 
 - Define canonical AST and schema
 - Define shorthand grammar and parser behavior
+- Expand shorthand across authoring surfaces (sets blocks, exercises blocks, schedule/rest/progression shorthands)
 - Implement parser, validator, and compiler skeleton
 - Provide examples and invalid fixtures
 - Add calendar scheduling and recurrence (dates, `interval_days`, `weekdays`)

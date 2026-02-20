@@ -1,0 +1,44 @@
+language_version: "0.1"
+metadata:
+  id: shorthand-demo
+  name: Shorthand Demo
+  description: Demonstrates coach-friendly shorthand across schedules, exercises, sets, and progression.
+calendar:
+  start_date: "2026-03-02"
+  end_date: "2026-03-16"
+sessions:
+  - id: mon-fri
+    name: Mon/Fri Upper
+    schedule: "MON, FRI"
+    exercises: |
+      Bench Press:
+        5 x 5 @75% # volume
+        1x5 @80% # top set
+        rest 2m
+      Chest Supported Row: 4x10 @RIR2; rest 90s
+  - id: interval
+    name: Interval Lower
+    schedule: "every 4 days +1"
+    exercises:
+      - "Back Squat: 3x5 @150kg; rest 3m"
+      - exercise: Romanian Deadlift
+        rest: "2m"
+        sets: |
+          3x8 @RPE7
+          2x8 @RPE8 # last sets
+      - exercise: Leg Press
+        sets:
+          - count: 3
+            reps: "10-12"
+            intensity: "RIR2"
+  - id: progression
+    name: Deadlift Progression
+    schedule: "every other day"
+    exercises:
+      - exercise: Deadlift
+        sets:
+          - shorthand: |
+              1x5 @100kg
+              1x5 @[95,105]kg # window
+            progression: "+2.5kg every 3 sessions on FRI if load>=target"
+

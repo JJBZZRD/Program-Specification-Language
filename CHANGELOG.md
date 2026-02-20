@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented in this file.
 
+## Unreleased
+
+- Massively expanded author-facing shorthand: schedule strings, exercise strings/blocks, multiline sets blocks, reps/intensity/rest duration shorthands, and progression shorthand strings.
+
 ## 0.1.0 - 2026-02-19
 
 - Scaffolded repository structure for PSL v0.1.

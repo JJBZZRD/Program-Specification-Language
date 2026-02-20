@@ -41,6 +41,9 @@ From the repo root:
 # Validate
 npm.cmd run psl:dev -- validate examples/hypertrophy_4day.psl.yaml
 
+# Validate (shorthand-heavy demo)
+npm.cmd run psl:dev -- validate examples/shorthand_demo.psl.yaml
+
 # Compile (canonical compiled structure)
 npm.cmd run psl:dev -- compile examples/hypertrophy_4day.psl.yaml --out out.compiled.json
 
@@ -157,11 +160,19 @@ Mondays and Fridays:
   exercises: []
 ```
 
+Shorthand alternatives:
+
+```yaml
+schedule: "every other day"
+schedule: "MON, FRI"
+schedule: "every 4 days +1" # start offset
+```
+
 Reference: [`day`](#day), [`schedule`](#schedule)
 
 ### Step 6: Add Exercises (`exercises`)
 
-Each session has `exercises`, which is a list:
+Each session has `exercises`, which can be a list of exercise objects (structured):
 
 ```yaml
 exercises:
@@ -170,11 +181,33 @@ exercises:
     sets: []
 ```
 
+You can also use shorthand exercise strings:
+
+```yaml
+exercises:
+  - "Bench Press: 5x5 @75%; rest 2m"
+  - |
+    Deadlift:
+      1x5 @100kg
+      1x5 @[95,105]kg # window
+      rest 3m
+```
+
+Or a multi-exercise block string:
+
+```yaml
+exercises: |
+  Bench Press:
+    5x5 @75%
+    rest 2m
+  Row: 3x10 @RIR2
+```
+
 Reference: [`exercise`](#exercise)
 
 ### Step 7: Add Sets (`sets`)
 
-`sets` is an array of set prescriptions. Each set prescription can be:
+`sets` can be an array of set prescriptions, or a multiline shorthand block string. Each set prescription can be:
 
 - A structured object (`count`, `reps`, optional `intensity`, optional `note`)
 - A shorthand string that compiles to a structured object
@@ -199,6 +232,14 @@ sets:
   - "3x10 @RIR2"
   - "5x5 @150kg"
   - "5x5 @[100,120]kg"
+```
+
+Multiline shorthand block:
+
+```yaml
+sets: |
+  5x5 @75% # optional note
+  1x5 @80%
 ```
 
 Reference: [`sets`](#sets), [`intensity`](#intensity), [Shorthand Syntax](#shorthand-syntax)
@@ -272,6 +313,12 @@ progression:
     type: sessions
     every: 3
   by: 2.5
+```
+
+Progression shorthand (equivalent to the structured form):
+
+```yaml
+progression: "+2.5kg every 3 sessions on FRI if load>=target"
 ```
 
 Example (for a Mon/Fri session, only count Fridays as progression checks):
@@ -437,13 +484,22 @@ Rule:
 
 #### `schedule`
 
-Type: object
+Type: object or string
 
 Optional. Use `schedule` for repeating sessions (requires `calendar.end_date`).
 
 Rule:
 
 - You must specify either `day` or `schedule` (not both).
+
+Shorthand examples:
+
+```yaml
+schedule: "every other day"
+schedule: "every 4 days +1" # start offset
+schedule: "MON, FRI"
+schedule: "on Tuesday Thursday"
+```
 
 ##### `schedule.type = interval_days`
 
@@ -479,7 +535,29 @@ schedule:
   days: [MON, FRI]
 ```
 
+#### `exercises`
+
+Type: array or string
+
+Required.
+
+Structured form:
+
+```yaml
+exercises:
+  - exercise: Back Squat
+    sets:
+      - "3x5 @75%"
+```
+
+Shorthand forms:
+
+- An array of exercise shorthand strings (see [Shorthand Syntax](#shorthand-syntax))
+- A multi-exercise block string (see [Shorthand Syntax](#shorthand-syntax))
+
 ### Exercise
+
+In source YAML, an exercise can be authored as a structured object or as shorthand. All forms normalize into the same canonical exercise shape.
 
 #### `exercise`
 
@@ -489,18 +567,32 @@ Required. Human-readable name.
 
 #### `sets`
 
-Type: array
+Type: array or string
 
 Required. Each element is either:
 
 - A set object, or
 - A shorthand string (see [Shorthand Syntax](#shorthand-syntax))
 
+You may also provide `sets` as a multiline shorthand block string:
+
+```yaml
+sets: |
+  5x5 @75%
+  1x5 @80%
+```
+
 #### `rest_seconds`
 
-Type: integer
+Type: integer or string
 
 Optional. Must be >= 0.
+
+Duration strings are supported (e.g. `"90s"`, `"2m"`, `"2m30s"`, `"2:30"`).
+
+Alias:
+
+- `rest` (same accepted forms as `rest_seconds`)
 
 ### Set
 
@@ -541,12 +633,22 @@ If you like shorthand but need to attach structured fields (like `progression` o
   note: "add 2.5kg each successful week"
 ```
 
+You can also use a multiline `shorthand` block. It expands into multiple set prescriptions, and the wrapper fields (`progression`, `note`) apply to each expanded set:
+
+```yaml
+- shorthand: |
+    1x5 @100kg
+    3x5 @[90,100]kg # backoffs
+  progression: "+2.5kg every week"
+```
+
 #### `reps`
 
 Reps can be:
 
 - A fixed integer: `reps: 5`
 - A range object:
+- A shorthand string: `reps: "8-12"`
 
 ```yaml
 reps:
@@ -556,13 +658,13 @@ reps:
 
 #### `intensity`
 
-Type: object
+Type: object or string
 
 Reference: [Intensity Targets](#intensity-targets)
 
 #### `progression`
 
-Type: object
+Type: object or string
 
 Optional.
 
@@ -577,6 +679,13 @@ Optional.
 ### Intensity Targets
 
 Intensity is a tagged object with a `type` and associated fields.
+
+In source YAML, you may also provide `intensity` as a shorthand string. It uses the same syntax as set shorthand intensities, with or without a leading `@`:
+
+- `"75%"` or `"@75%"`
+- `"RPE8"` or `"@RPE8"`
+- `"150kg"` or `"@150kg"`
+- `"[100,120]kg"` or `"@[100,120]kg"`
 
 #### `percent_1rm`
 
@@ -681,9 +790,23 @@ In PSL v0.1, progression is:
 
 #### `progression` (Set-Level)
 
-Type: object
+Type: object or string
 
 Optional.
+
+Progression shorthand examples:
+
+```yaml
+progression: "+2.5kg every week"
+progression: "+2.5 every 3 sessions"
+progression: "+2.5 every 3 sessions on FRI if load>=target"
+progression: "-0.5 every 2 weeks if success"
+```
+
+Notes:
+
+- If cadence is omitted, shorthand defaults to weekly cadence.
+- If the `if ...` clause is omitted, progression defaults to `session_success == true` when applying progression.
 
 Supported types (v0.1):
 
@@ -849,21 +972,53 @@ Example:
 
 ### Shorthand Syntax
 
-Shorthand is a coach-friendly, imperative-looking notation that compiles into canonical set objects.
+Shorthand is a coach-friendly notation that compiles deterministically into canonical objects during validation.
 
-Supported patterns (v0.1):
+Shorthand is accepted in multiple places in v0.1, not just set strings.
+
+See also:
+
+- `examples/shorthand_demo.psl.yaml`
+- `spec/shorthand.ebnf`
+
+#### Where Shorthand Is Allowed
+
+- `session.schedule`: object or string shorthand
+- `session.exercises`: array of exercises OR a multi-exercise block string
+- Exercise entries: object OR exercise shorthand string
+- `exercise.sets`: array of sets OR a multiline sets block string
+- Set entries: structured set object, set shorthand string, or shorthand wrapper object (`{ shorthand: "...", ... }`)
+- `set.reps`: integer, `{min,max}`, or shorthand string (e.g. `"8-12"`)
+- `set.intensity`: object or shorthand string (with or without leading `@`)
+- `exercise.rest_seconds` and `exercise.rest`: integer seconds or duration string
+- `set.progression`: object or shorthand string
+
+#### Set Shorthand
+
+Set shorthand is the most common form. It expands into a set object with:
+
+- `count`
+- `reps` (fixed or range)
+- optional `intensity`
+
+Pattern:
 
 - `"<count>x<reps>"`
 - `"<count>x<min>-<max>"`
-- Optional intensity clause: `@<intensity>`
+- optional intensity clause: `@<intensity>`
+
+Spaces are allowed:
+
+- `"5 x 5 @75%"`
+- `"3x8 - 10 @RPE8"`
 
 Intensity forms:
 
-- Percent: `@75%`
-- RPE: `@RPE8` / `@rpe8.5`
-- RIR: `@RIR2` / `@rir1`
-- Load: `@150kg` / `@315lb`
-- Load range: `@[100,120]kg` / `@[225,275]lb`
+- Percent: `@75%` or `@75%1RM`
+- RPE: `@RPE8`, `@8RPE`
+- RIR: `@RIR2`, `@2RIR`
+- Load: `@150kg`, `@315lb` (also accepts `kgs`/`lbs`)
+- Load range: `@[100,120]kg` or `@100-120kg`
 
 Examples:
 
@@ -873,6 +1028,124 @@ Examples:
 - `"3x10 @RIR2"`
 - `"5x5 @150kg"`
 - `"5x5 @[100,120]kg"`
+- `"5x5 @100-120kg"`
+
+#### Sets Block Shorthand (`exercise.sets` as a string)
+
+You can provide `exercise.sets` as a multiline string (YAML block scalar). Each non-empty line is parsed as set shorthand.
+
+```yaml
+sets: |
+  5x5 @75%
+  1x5 @80%
+```
+
+Notes:
+
+- You can separate multiple set entries on a single line with `;`.
+- In set blocks, a trailing `# ...` becomes `set.note`:
+
+```yaml
+sets: |
+  5x5 @75% # volume work
+  1x5 @80%
+```
+
+#### Exercise Shorthand (String Exercise Entries)
+
+Inside `session.exercises`, you can use exercise shorthand strings.
+
+One-line form:
+
+```yaml
+exercises:
+  - "Bench Press: 5x5 @75%; 1x5 @80%; rest 2m"
+```
+
+Multiline form:
+
+```yaml
+exercises:
+  - |
+    Deadlift:
+      1x5 @100kg
+      1x5 @[95,105]kg # window
+      rest 3m
+```
+
+Rules:
+
+- The first line is the exercise name (optionally followed by `:` or `|` and inline sets).
+- Subsequent lines are either set lines or a `rest ...` line.
+
+#### Exercises Block Shorthand (`session.exercises` as a string)
+
+You can define multiple exercises as a single block string:
+
+```yaml
+exercises: |
+  Bench Press:
+    5x5 @75%
+    rest 2m
+  Row: 3x10 @RIR2
+```
+
+#### Schedule Shorthand (`session.schedule` as a string)
+
+Interval days:
+
+- `"every other day"` (equivalent to `{ type: interval_days, every: 2 }`)
+- `"every 4 days"` / `"4d"`
+
+Weekdays:
+
+- `"MON, FRI"` / `"on Monday Friday"` / `"every Tue/Thu"`
+
+Start offsets:
+
+- `"every 4 days +1"`
+- `"MON, FRI offset 2"`
+
+#### `reps` Shorthand (String Reps)
+
+Structured sets can use string reps:
+
+- `"5"`
+- `"8-12"`
+
+#### `intensity` Shorthand (String Intensity)
+
+Structured sets can use string intensity (with or without leading `@`), e.g.:
+
+- `"75%"`
+- `"RPE8.5"`
+- `"150kg"`
+- `"[100,120]kg"`
+
+#### Rest Shorthand (Duration Strings)
+
+`rest_seconds` (or `rest`) can be:
+
+- integer seconds: `rest_seconds: 120`
+- duration strings: `rest: "2m"`, `rest_seconds: "90s"`, `rest_seconds: "2:30"`
+
+#### Progression Shorthand (String Progression Rules)
+
+Progression can be written as a string and expands into a structured `increment` rule with an explicit cadence.
+
+Examples:
+
+```yaml
+progression: "+2.5kg every week"
+progression: "+2.5 every 3 sessions"
+progression: "+2.5 every 3 sessions on FRI if load>=target"
+progression: "-0.5 every 2 weeks if success"
+```
+
+Defaults:
+
+- If cadence is omitted, shorthand defaults to weekly cadence.
+- If `if ...` is omitted, progression defaults to `session_success == true`.
 
 ### Compilation Output
 

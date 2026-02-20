@@ -29,7 +29,7 @@ PSL is declarative first. Authors describe what a program is, not how an executi
 
 Principles:
 
-- Declarative core with limited imperative shorthand
+- Declarative core with coach-friendly shorthand (still deterministic)
 - Human-readable syntax and machine-precise semantics
 - Domain correctness over implementation convenience
 - Platform independence

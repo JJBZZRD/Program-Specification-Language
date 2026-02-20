@@ -1,18 +1,125 @@
-﻿(* PSL shorthand v0.1 *)
+(* PSL shorthand v0.1 *)
 
-shorthand       = set_block, [ws, intensity_clause] ;
-set_block       = integer, "x", reps ;
-reps            = integer | integer, "-", integer ;
-intensity_clause= "@", intensity ;
-intensity       = percent | rpe | rir | load | load_range ;
-percent         = number, "%" ;
-rpe             = ("RPE" | "rpe"), [ws], number ;
-rir             = ("RIR" | "rir"), [ws], number ;
-load            = number, [ws], unit ;
-load_range      = "[", number, [ws], ",", [ws], number, "]", [ws], unit ;
-unit            = "kg" | "KG" | "lb" | "LB" ;
+(* -------------------------------------------------------------------------- *)
+(* Building Blocks                                                            *)
+(* -------------------------------------------------------------------------- *)
 
 integer         = digit, {digit} ;
 number          = integer, [".", integer] ;
 ws              = {" " | "\t"} ;
+nl              = "\n" | "\r\n" ;
 digit           = "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" ;
+
+(* -------------------------------------------------------------------------- *)
+(* Set Shorthand                                                              *)
+(* -------------------------------------------------------------------------- *)
+
+(* Used anywhere a set prescription can be written as a string. *)
+set_shorthand   = set_block, [ws, intensity_clause] ;
+set_block       = integer, ws?, ("x" | "X"), ws?, reps ;
+reps            = integer | integer, ws?, "-", ws?, integer ;
+
+intensity_clause= "@", ws?, intensity_expr ;
+intensity_expr  = percent | rpe | rir | load | load_range_bracket | load_range_hyphen ;
+
+percent         = number, ws?, "%", [ws?, "1", ws?, ("RM" | "rm")] ;
+rpe             = (("RPE" | "rpe"), ws?, number) | (number, ws?, ("RPE" | "rpe")) ;
+rir             = (("RIR" | "rir"), ws?, number) | (number, ws?, ("RIR" | "rir")) ;
+
+load            = number, ws?, unit ;
+load_range_bracket = "[", ws?, number, ws?, ",", ws?, number, ws?, "]", ws?, unit ;
+load_range_hyphen  = number, ws?, "-", ws?, number, ws?, unit ;
+
+unit            = "kg" | "KG" | "kgs" | "KGS" | "lb" | "LB" | "lbs" | "LBS" ;
+
+(* -------------------------------------------------------------------------- *)
+(* Sets Block Shorthand                                                       *)
+(* -------------------------------------------------------------------------- *)
+
+(* Used when `exercise.sets` (or a set wrapper's `shorthand`) is a multiline string. *)
+sets_block      = set_line, { nl, set_line } ;
+set_line        = [ws], ["-", ws], set_shorthand, [ws, "#", ws, note] ;
+note            = { ? any character except newline ? } ;
+
+(* -------------------------------------------------------------------------- *)
+(* Schedule Shorthand                                                         *)
+(* -------------------------------------------------------------------------- *)
+
+(* Used when `session.schedule` is a string. *)
+schedule_shorthand =
+  ( interval_schedule | weekday_schedule ),
+  [ws, schedule_offset] ;
+
+interval_schedule =
+  "every", ws,
+  ( "other", ws, "day"
+  | integer, ws?, ("d" | "day" | "days")
+  | "day" | "days"
+  ) ;
+
+weekday_schedule =
+  [("on" | "every"), ws],
+  weekday, { (ws | "," | "/"), weekday } ;
+
+schedule_offset  = ("+", ws?, integer) | ("offset", ws, integer) ;
+
+(* -------------------------------------------------------------------------- *)
+(* Exercise Shorthand                                                         *)
+(* -------------------------------------------------------------------------- *)
+
+(* Used when an exercise entry is written as a string. *)
+exercise_shorthand =
+  exercise_name,
+  ws?, (":" | "|"), ws?,
+  exercise_sets_inline,
+  [ws?, ";", ws?, rest_clause] ;
+
+exercise_sets_inline =
+  set_shorthand, { ws?, ";", ws?, set_shorthand } ;
+
+(* Multiline form (YAML block scalar) *)
+exercise_block =
+  exercise_header,
+  { nl, (set_line | rest_line) } ;
+
+exercise_header =
+  exercise_name,
+  [ws?, (":" | "|"), ws?, exercise_sets_inline] ;
+
+rest_line       = rest_clause ;
+rest_clause     = ("rest" | "REST"), ws?, [":" | "="], ws?, duration ;
+
+duration        = integer, ("s" | "m") | integer, ":", integer ;
+exercise_name   = { ? any character except newline ? } ;
+
+(* -------------------------------------------------------------------------- *)
+(* Progression Shorthand                                                      *)
+(* -------------------------------------------------------------------------- *)
+
+(* Used when `set.progression` is a string. *)
+progression_shorthand =
+  inc_by,
+  [ws, cadence],
+  [ws, weekday_filter],
+  [ws, condition] ;
+
+inc_by          = inc_number, [ws?, unit] | inc_range, [ws?, unit] ;
+inc_number      = ["+" | "-"], number ;
+inc_range       = ["+" | "-"], "[", ws?, number, [ws?, ",", ws?, number], ws?, "]" ;
+
+cadence         =
+  ( "weekly" )
+  | ( "/", [integer], ("w" | "s") )
+  | ( "every", ws, ("other" | integer), ws, ("week" | "weeks" | "w" | "session" | "sessions" | "s") ) ;
+
+weekday_filter  = ("on" | "only"), ws, weekday, { (ws | "," | "/"), weekday } ;
+
+condition       = "if", ws, ( "success" | "fail" | metric_condition ) ;
+metric_condition= [metric, ws], op, ws?, target_ref ;
+metric          = "load" | "rpe" | "rir" ;
+op              = ">=" | ">" | "<=" | "<" | "==" | "!=" ;
+target_ref      = "target" | "value" | "min" | "max" ;
+
+(* NOTE: weekday tokens may be written as MON/MONDAY/etc, but normalize to MON..SUN in the AST. *)
+weekday         = "MON" | "TUE" | "WED" | "THU" | "FRI" | "SAT" | "SUN" ;
+
