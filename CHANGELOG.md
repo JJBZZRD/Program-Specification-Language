@@ -5,6 +5,8 @@ All notable changes to this project will be documented in this file.
 ## Unreleased
 
 - Massively expanded author-facing shorthand: schedule strings, exercise strings/blocks, multiline sets blocks, reps/intensity/rest duration shorthands, and progression shorthand strings.
+- Added `%1RM + absolute load offset` intensity support (`plus_load`), with shorthand like `@70%+5lb`.
+- Extended progression to support load-delta increments on `%1RM` targets (e.g. `progression: "+5lb every week"` on `@70%`).
 
 ## 0.1.0 - 2026-02-19
 

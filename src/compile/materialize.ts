@@ -1,6 +1,7 @@
 import type {
   ComparisonOp,
   IntensityTarget,
+  LoadUnit,
   ProgressionCondition,
   ProgressionRule,
   Weekday
@@ -53,7 +54,11 @@ function cloneIntensity(intensity: IntensityTarget | undefined): IntensityTarget
   }
 
   if (intensity.type === "percent_1rm") {
-    return { type: "percent_1rm", value: intensity.value };
+    return {
+      type: "percent_1rm",
+      value: intensity.value,
+      ...(intensity.plus_load ? { plus_load: { ...intensity.plus_load } } : {})
+    };
   }
 
   if (intensity.type === "rpe") {
@@ -69,6 +74,17 @@ function cloneIntensity(intensity: IntensityTarget | undefined): IntensityTarget
   }
 
   return { type: "load_range", min: intensity.min, max: intensity.max, unit: intensity.unit };
+}
+
+function isLoadBy(by: ProgressionRule["by"]): by is { type: "load"; value: number; unit: LoadUnit } {
+  return (
+    typeof by === "object" &&
+    by !== null &&
+    "type" in by &&
+    (by as { type?: unknown }).type === "load" &&
+    typeof (by as { value?: unknown }).value === "number" &&
+    typeof (by as { unit?: unknown }).unit === "string"
+  );
 }
 
 function cloneSchedule(session: CompiledSession): CompiledSession["schedule"] {
@@ -165,6 +181,15 @@ function applyWeeklyIncrement(base: IntensityTarget, by: ProgressionRule["by"], 
       return { type: "load_range", min, max, unit: base.unit };
     }
 
+    if (isLoadBy(by)) {
+      if (by.unit !== base.unit) {
+        throw new Error(`Invalid progression.by unit: expected ${base.unit}, got ${by.unit}.`);
+      }
+      const min = base.min + by.value * times;
+      const max = base.max + by.value * times;
+      return { type: "load_range", min, max, unit: base.unit };
+    }
+
     const minBy = by.min ?? 0;
     const maxBy = by.max ?? 0;
     return {
@@ -175,23 +200,66 @@ function applyWeeklyIncrement(base: IntensityTarget, by: ProgressionRule["by"], 
     };
   }
 
-  if (typeof by !== "number") {
-    throw new Error("Invalid progression.by: expected number for non-load_range intensity.");
-  }
-
   if (base.type === "percent_1rm") {
-    return { type: "percent_1rm", value: base.value + by * times };
+    if (typeof by === "number") {
+      return {
+        type: "percent_1rm",
+        value: base.value + by * times,
+        ...(base.plus_load ? { plus_load: { ...base.plus_load } } : {})
+      };
+    }
+
+    if (isLoadBy(by)) {
+      const current = base.plus_load;
+      if (current && current.unit !== by.unit) {
+        throw new Error(
+          `Invalid progression.by unit: expected ${current.unit} (from intensity.plus_load), got ${by.unit}.`
+        );
+      }
+
+      const nextValue = (current?.value ?? 0) + by.value * times;
+      const keepPlusLoad = current !== undefined || nextValue !== 0;
+
+      return {
+        type: "percent_1rm",
+        value: base.value,
+        ...(keepPlusLoad ? { plus_load: { value: nextValue, unit: by.unit } } : {})
+      };
+    }
+
+    throw new Error("Invalid progression.by: expected number or load delta for percent_1rm intensity.");
   }
 
   if (base.type === "rpe") {
+    if (typeof by !== "number") {
+      throw new Error("Invalid progression.by: expected number for rpe intensity.");
+    }
     return { type: "rpe", value: base.value + by * times };
   }
 
   if (base.type === "rir") {
+    if (typeof by !== "number") {
+      throw new Error("Invalid progression.by: expected number for rir intensity.");
+    }
     return { type: "rir", value: base.value + by * times };
   }
 
-  return { type: "load", value: base.value + by * times, unit: base.unit };
+  if (base.type === "load") {
+    if (typeof by === "number") {
+      return { type: "load", value: base.value + by * times, unit: base.unit };
+    }
+
+    if (isLoadBy(by)) {
+      if (by.unit !== base.unit) {
+        throw new Error(`Invalid progression.by unit: expected ${base.unit}, got ${by.unit}.`);
+      }
+      return { type: "load", value: base.value + by.value * times, unit: base.unit };
+    }
+
+    throw new Error("Invalid progression.by: expected number or load delta for load intensity.");
+  }
+
+  throw new Error("Invalid progression.by: unsupported intensity type.");
 }
 
 type ResolvedCadence = {
@@ -238,6 +306,16 @@ function ensureValidIntensity(intensity: IntensityTarget, context: string): void
   if (intensity.type === "percent_1rm") {
     if (!(intensity.value > 0 && intensity.value <= 150)) {
       throw new Error(`${context}: percent_1rm intensity must be > 0 and <= 150.`);
+    }
+
+    const plusLoad = intensity.plus_load;
+    if (plusLoad) {
+      if (!Number.isFinite(plusLoad.value)) {
+        throw new Error(`${context}: percent_1rm plus_load value must be finite.`);
+      }
+      if (plusLoad.unit !== "kg" && plusLoad.unit !== "lb") {
+        throw new Error(`${context}: percent_1rm plus_load unit must be kg or lb.`);
+      }
     }
     return;
   }

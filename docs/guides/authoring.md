@@ -686,6 +686,7 @@ In source YAML, you may also provide `intensity` as a shorthand string. It uses 
 - `"RPE8"` or `"@RPE8"`
 - `"150kg"` or `"@150kg"`
 - `"[100,120]kg"` or `"@[100,120]kg"`
+- `"70%+5lb"` or `"@70%+5lb"` (percent + absolute load offset)
 
 #### `percent_1rm`
 
@@ -693,6 +694,9 @@ In source YAML, you may also provide `intensity` as a shorthand string. It uses 
 - Fields:
   - `type: percent_1rm`
   - `value` number, `0 < value <= 150`
+  - optional `plus_load`: absolute load delta applied on top of the computed `%1RM` load
+    - `value` number (may be positive or negative)
+    - `unit` string enum: `kg` or `lb`
 
 Examples:
 
@@ -703,6 +707,19 @@ intensity:
 ```
 
 Shorthand: `@75%`
+
+Example (percent + offset):
+
+```yaml
+intensity:
+  type: percent_1rm
+  value: 70
+  plus_load:
+    value: 5
+    unit: lb
+```
+
+Shorthand: `@70%+5lb` or `@70%-2.5kg`
 
 #### `rpe`
 
@@ -798,9 +815,24 @@ Progression shorthand examples:
 
 ```yaml
 progression: "+2.5kg every week"
+progression: "+2.5% every week" # for percent_1rm targets
+progression: "+5lb every week" # for percent_1rm targets (adds to computed load via intensity.plus_load)
 progression: "+2.5 every 3 sessions"
 progression: "+2.5 every 3 sessions on FRI if load>=target"
 progression: "-0.5 every 2 weeks if success"
+```
+
+Percent targets (Smolov Jr style) can be progressed in two different ways:
+
+- Percent points: `"+2.5% every week"` increases the `%1RM` value.
+- Absolute load offset: `"+5lb every week"` keeps the `%1RM` the same but increases `intensity.plus_load` (so apps can compute `%1RM load + plus_load`).
+
+Example (week-to-week load jump on a `%1RM` prescription):
+
+```yaml
+sets:
+  - shorthand: "6x6 @70%"
+    progression: "+5lb every week"
 ```
 
 Notes:
@@ -827,10 +859,18 @@ Fields:
   - required for `increment`
   - optional for `weekly_increment` (defaults to `{type: weeks, every: 1}`)
 - `by`:
-  - number for `percent_1rm`, `rpe`, `rir`, `load`
-  - number or object for `load_range`:
+  - `percent_1rm` intensity:
+    - number (percent points, e.g. `by: 2.5` means `+2.5%1RM`)
+    - or load delta object `by: { type: load, value: 5, unit: lb }` (adjusts `intensity.plus_load`)
+  - `load` intensity:
+    - number (same unit as the load target)
+    - or load delta object `by: { type: load, value: 2.5, unit: kg }`
+  - `rpe` / `rir` intensity:
+    - number (RPE/RIR points)
+  - `load_range` intensity:
     - `by: 2.5` shifts both `min` and `max` by `+2.5` each successful cadence unit
     - `by: { min: 2.5, max: 5 }` can shift bounds independently (at least one of `min`/`max` is required)
+    - or load delta object `by: { type: load, value: 2.5, unit: kg }` to shift both bounds (unit must match)
 - `when` (optional):
   - If omitted, defaults to `session_success == true`
 
@@ -979,6 +1019,7 @@ Shorthand is accepted in multiple places in v0.1, not just set strings.
 See also:
 
 - `examples/shorthand_demo.psl.yaml`
+- `examples/smolov_jr_bench.psl.yaml`
 - `spec/shorthand.ebnf`
 
 #### Where Shorthand Is Allowed
@@ -1015,6 +1056,7 @@ Spaces are allowed:
 Intensity forms:
 
 - Percent: `@75%` or `@75%1RM`
+- Percent + offset: `@70%+5lb`, `@70%-2.5kg`
 - RPE: `@RPE8`, `@8RPE`
 - RIR: `@RIR2`, `@2RIR`
 - Load: `@150kg`, `@315lb` (also accepts `kgs`/`lbs`)
@@ -1024,6 +1066,7 @@ Examples:
 
 - `"5x5"`
 - `"5x5 @75%"`
+- `"6x6 @70%+5lb"`
 - `"3x8-10 @RPE8"`
 - `"3x10 @RIR2"`
 - `"5x5 @150kg"`
@@ -1118,6 +1161,7 @@ Structured sets can use string reps:
 Structured sets can use string intensity (with or without leading `@`), e.g.:
 
 - `"75%"`
+- `"70%+5lb"`
 - `"RPE8.5"`
 - `"150kg"`
 - `"[100,120]kg"`
@@ -1137,6 +1181,8 @@ Examples:
 
 ```yaml
 progression: "+2.5kg every week"
+progression: "+2.5% every week" # percent_1rm targets
+progression: "+5lb every week" # percent_1rm targets (adds to computed load via intensity.plus_load)
 progression: "+2.5 every 3 sessions"
 progression: "+2.5 every 3 sessions on FRI if load>=target"
 progression: "-0.5 every 2 weeks if success"
@@ -1146,6 +1192,9 @@ Defaults:
 
 - If cadence is omitted, shorthand defaults to weekly cadence.
 - If `if ...` is omitted, progression defaults to `session_success == true`.
+- For `percent_1rm` targets:
+  - `+2.5` and `+2.5%` mean `+2.5` percentage points.
+  - `+5lb` / `+2.5kg` adjusts `intensity.plus_load` (adds to the computed `%1RM` load).
 
 ### Compilation Output
 

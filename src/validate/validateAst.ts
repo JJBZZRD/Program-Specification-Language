@@ -389,7 +389,14 @@ function parseIntensity(
     return undefined;
   }
 
+  const plusLoadRaw = intensity.plus_load;
+
   if (type === "load_range") {
+    if (plusLoadRaw !== undefined) {
+      addError(diagnostics, `${path}.plus_load`, "plus_load is only supported for percent_1rm intensity.");
+      return undefined;
+    }
+
     const minRaw = intensity.min;
     const maxRaw = intensity.max;
 
@@ -441,7 +448,41 @@ function parseIntensity(
       return undefined;
     }
 
-    return { type, value };
+    let plus_load: { value: number; unit: LoadUnit } | undefined;
+
+    if (plusLoadRaw !== undefined) {
+      if (!isRecord(plusLoadRaw)) {
+        addError(diagnostics, `${path}.plus_load`, "plus_load must be an object {value,unit}.");
+        return undefined;
+      }
+
+      const plusValueRaw = plusLoadRaw.value;
+      if (typeof plusValueRaw !== "number" || !Number.isFinite(plusValueRaw)) {
+        addError(diagnostics, `${path}.plus_load.value`, "plus_load.value must be a finite number.");
+        return undefined;
+      }
+
+      const plusUnitRaw = plusLoadRaw.unit;
+      if (typeof plusUnitRaw !== "string") {
+        addError(diagnostics, `${path}.plus_load.unit`, "plus_load.unit must be kg or lb.");
+        return undefined;
+      }
+
+      const plusUnit = plusUnitRaw.toLowerCase();
+      if (plusUnit !== "kg" && plusUnit !== "lb") {
+        addError(diagnostics, `${path}.plus_load.unit`, "plus_load.unit must be kg or lb.");
+        return undefined;
+      }
+
+      plus_load = { value: plusValueRaw, unit: plusUnit as LoadUnit };
+    }
+
+    return { type, value, ...(plus_load ? { plus_load } : {}) };
+  }
+
+  if (plusLoadRaw !== undefined) {
+    addError(diagnostics, `${path}.plus_load`, "plus_load is only supported for percent_1rm intensity.");
+    return undefined;
   }
 
   if (type === "rpe") {
@@ -700,6 +741,7 @@ function parseProgressionShorthand(
 
   let by: WeeklyIncrementBy | undefined;
   let byUnit: LoadUnit | undefined;
+  let byExplicitUnit: "percent" | "rpe" | "rir" | undefined;
   let consumed = 0;
 
   if (byRangeMatch?.groups?.min !== undefined) {
@@ -728,7 +770,7 @@ function parseProgressionShorthand(
     consumed = byRangeMatch[0].length;
   } else {
     const byMatch =
-      /^\s*(?<sign>[+-])?\s*(?<value>\d+(?:\.\d+)?)\s*(?<unit>kg|kgs|lb|lbs)?/i.exec(main);
+      /^\s*(?<sign>[+-])?\s*(?<value>\d+(?:\.\d+)?)\s*(?<unit>%\s*(?:1\s*rm)?|rpe|rir|kg|kgs|lb|lbs)?/i.exec(main);
 
     if (!byMatch?.groups?.value) {
       addError(diagnostics, path, "progression shorthand must start with an increment (e.g. +2.5).");
@@ -746,21 +788,63 @@ function parseProgressionShorthand(
     by = value;
 
     if (byMatch.groups.unit) {
-      const unitToken = byMatch.groups.unit.toLowerCase();
-      byUnit = unitToken === "kg" || unitToken === "kgs" ? "kg" : "lb";
+      const unitToken = byMatch.groups.unit.replace(/\s+/g, "").toLowerCase();
+      if (unitToken.startsWith("%")) {
+        byExplicitUnit = "percent";
+      } else if (unitToken === "rpe") {
+        byExplicitUnit = "rpe";
+      } else if (unitToken === "rir") {
+        byExplicitUnit = "rir";
+      } else {
+        byUnit = unitToken === "kg" || unitToken === "kgs" ? "kg" : "lb";
+      }
     }
 
     consumed = byMatch[0].length;
   }
 
-  if (byUnit !== undefined) {
-    if (intensity.type !== "load" && intensity.type !== "load_range") {
-      addError(diagnostics, path, "Units in progression shorthand are only valid for load/load_range intensity.");
+  if (byExplicitUnit === "percent") {
+    if (intensity.type !== "percent_1rm") {
+      addError(diagnostics, path, "Percent units in progression shorthand are only valid for percent_1rm intensity.");
       return undefined;
     }
+  } else if (byExplicitUnit === "rpe") {
+    if (intensity.type !== "rpe") {
+      addError(diagnostics, path, "RPE units in progression shorthand are only valid for rpe intensity.");
+      return undefined;
+    }
+  } else if (byExplicitUnit === "rir") {
+    if (intensity.type !== "rir") {
+      addError(diagnostics, path, "RIR units in progression shorthand are only valid for rir intensity.");
+      return undefined;
+    }
+  }
 
-    if (intensity.unit !== byUnit) {
-      addError(diagnostics, path, `Progression unit ${byUnit} does not match intensity unit ${intensity.unit}.`);
+  if (byUnit !== undefined) {
+    if (intensity.type === "load" || intensity.type === "load_range") {
+      if (intensity.unit !== byUnit) {
+        addError(diagnostics, path, `Progression unit ${byUnit} does not match intensity unit ${intensity.unit}.`);
+        return undefined;
+      }
+    } else if (intensity.type === "percent_1rm") {
+      if (intensity.plus_load?.unit !== undefined && intensity.plus_load.unit !== byUnit) {
+        addError(
+          diagnostics,
+          path,
+          `Progression unit ${byUnit} does not match intensity.plus_load unit ${intensity.plus_load.unit}.`
+        );
+        return undefined;
+      }
+
+      if (typeof by !== "number") {
+        addError(diagnostics, path, "Load-unit progression increments for percent_1rm intensity must be a number.");
+        return undefined;
+      }
+
+      // For percent_1rm intensity, a kg/lb increment means "add to computed load", represented as a load delta.
+      by = { type: "load", value: by, unit: byUnit };
+    } else {
+      addError(diagnostics, path, "Units in progression shorthand are only valid for load/load_range or percent_1rm intensity.");
       return undefined;
     }
   }
@@ -973,7 +1057,46 @@ function parseProgression(
 
   let by: WeeklyIncrementBy | undefined;
 
-  if (intensity.type === "load_range") {
+  if (isRecord(byRaw) && byRaw.type === "load") {
+    const valueRaw = byRaw.value;
+    if (typeof valueRaw !== "number" || !Number.isFinite(valueRaw)) {
+      addError(diagnostics, `${path}.by.value`, "by.value must be a finite number.");
+      return undefined;
+    }
+
+    const unitRaw = byRaw.unit;
+    if (typeof unitRaw !== "string") {
+      addError(diagnostics, `${path}.by.unit`, "by.unit must be kg or lb.");
+      return undefined;
+    }
+
+    const unit = unitRaw.toLowerCase();
+    if (unit !== "kg" && unit !== "lb") {
+      addError(diagnostics, `${path}.by.unit`, "by.unit must be kg or lb.");
+      return undefined;
+    }
+
+    if (intensity.type === "load" || intensity.type === "load_range") {
+      if (intensity.unit !== unit) {
+        addError(diagnostics, `${path}.by`, `Progression unit ${unit} does not match intensity unit ${intensity.unit}.`);
+        return undefined;
+      }
+    } else if (intensity.type === "percent_1rm") {
+      if (intensity.plus_load?.unit !== undefined && intensity.plus_load.unit !== unit) {
+        addError(
+          diagnostics,
+          `${path}.by`,
+          `Progression unit ${unit} does not match intensity.plus_load unit ${intensity.plus_load.unit}.`
+        );
+        return undefined;
+      }
+    } else {
+      addError(diagnostics, `${path}.by`, "Load-unit progression increments are only valid for load/load_range/percent_1rm intensity.");
+      return undefined;
+    }
+
+    by = { type: "load", value: valueRaw, unit: unit as LoadUnit };
+  } else if (intensity.type === "load_range") {
     if (typeof byRaw === "number") {
       if (!Number.isFinite(byRaw)) {
         addError(diagnostics, `${path}.by`, "by must be a finite number.");

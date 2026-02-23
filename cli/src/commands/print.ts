@@ -62,19 +62,25 @@ export async function runPrintCommand(args: string[]): Promise<number> {
       exercise.sets.forEach((set) => {
         const repText =
           set.reps.min === set.reps.max ? `${set.reps.min}` : `${set.reps.min}-${set.reps.max}`;
-        const intensityText = set.intensity
-          ? set.intensity.type === "load"
-            ? ` @ ${set.intensity.value}${set.intensity.unit}`
-            : set.intensity.type === "load_range"
-              ? ` @ [${set.intensity.min},${set.intensity.max}]${set.intensity.unit}`
-              : set.intensity.type === "percent_1rm"
-                ? ` @ ${set.intensity.value}%`
-                : set.intensity.type === "rpe"
-                  ? ` @ RPE${set.intensity.value}`
-                  : set.intensity.type === "rir"
-                    ? ` @ RIR${set.intensity.value}`
-                    : ""
-          : "";
+        let intensityText = "";
+        const intensity = set.intensity;
+        if (intensity) {
+          if (intensity.type === "load") {
+            intensityText = ` @ ${intensity.value}${intensity.unit}`;
+          } else if (intensity.type === "load_range") {
+            intensityText = ` @ [${intensity.min},${intensity.max}]${intensity.unit}`;
+          } else if (intensity.type === "percent_1rm") {
+            const plus = intensity.plus_load;
+            const plusText = plus
+              ? ` ${plus.value >= 0 ? "+" : "-"} ${Math.abs(plus.value)}${plus.unit}`
+              : "";
+            intensityText = ` @ ${intensity.value}%${plusText}`;
+          } else if (intensity.type === "rpe") {
+            intensityText = ` @ RPE${intensity.value}`;
+          } else if (intensity.type === "rir") {
+            intensityText = ` @ RIR${intensity.value}`;
+          }
+        }
         console.log(`    set ${set.index}: ${repText}${intensityText}`);
       });
     });

@@ -418,21 +418,45 @@
                                                                                             "type":  "number"
                                                                                         }
                                                                             },
-                                                             "anyOf":  [
-                                                                           {
-                                                                               "required":  [
-                                                                                                "min"
-                                                                                            ]
-                                                                           },
-                                                                           {
-                                                                               "required":  [
-                                                                                                "max"
-                                                                                            ]
-                                                                           }
-                                                                       ]
-                                                         }
-                                                     ]
-                                       },
+                                                          "anyOf":  [
+                                                                            {
+                                                                                "required":  [
+                                                                                                 "min"
+                                                                                             ]
+                                                                            },
+                                                                            {
+                                                                                "required":  [
+                                                                                                 "max"
+                                                                                             ]
+                                                                            }
+                                                                        ]
+                                                          },
+                                                          {
+                                                              "type":  "object",
+                                                              "required":  [
+                                                                               "type",
+                                                                               "value",
+                                                                               "unit"
+                                                                           ],
+                                                              "additionalProperties":  false,
+                                                              "properties":  {
+                                                                                 "type":  {
+                                                                                              "const":  "load"
+                                                                                          },
+                                                                                 "value":  {
+                                                                                               "type":  "number"
+                                                                                           },
+                                                                                 "unit":  {
+                                                                                              "type":  "string",
+                                                                                              "enum":  [
+                                                                                                           "kg",
+                                                                                                           "lb"
+                                                                                                       ]
+                                                                                          }
+                                                                             }
+                                                          }
+                                                      ]
+                                        },
                   "progressionCadence":  {
                                             "oneOf":  [
                                                           {
@@ -542,17 +566,37 @@
                                                                        "value"
                                                                    ],
                                                       "additionalProperties":  false,
-                                                      "properties":  {
-                                                                         "type":  {
-                                                                                      "const":  "percent_1rm"
-                                                                                  },
-                                                                         "value":  {
-                                                                                       "type":  "number",
-                                                                                       "exclusiveMinimum":  0,
-                                                                                       "maximum":  150
-                                                                                   }
-                                                                     }
-                                                  },
+                                                       "properties":  {
+                                                                          "type":  {
+                                                                                       "const":  "percent_1rm"
+                                                                                   },
+                                                                          "value":  {
+                                                                                        "type":  "number",
+                                                                                        "exclusiveMinimum":  0,
+                                                                                        "maximum":  150
+                                                                                    },
+                                                                          "plus_load":  {
+                                                                                           "type":  "object",
+                                                                                           "required":  [
+                                                                                                            "value",
+                                                                                                            "unit"
+                                                                                                        ],
+                                                                                           "additionalProperties":  false,
+                                                                                           "properties":  {
+                                                                                                              "value":  {
+                                                                                                                           "type":  "number"
+                                                                                                                       },
+                                                                                                              "unit":  {
+                                                                                                                          "type":  "string",
+                                                                                                                          "enum":  [
+                                                                                                                                       "kg",
+                                                                                                                                       "lb"
+                                                                                                                                   ]
+                                                                                                                      }
+                                                                                                          }
+                                                                                       }
+                                                                      }
+                                                   },
                                                   {
                                                       "type":  "object",
                                                       "required":  [

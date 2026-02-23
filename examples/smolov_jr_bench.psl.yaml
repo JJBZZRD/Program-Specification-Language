@@ -1,0 +1,50 @@
+language_version: "0.1"
+
+metadata:
+  id: smolov_jr_bench_demo
+  name: Smolov Jr (Bench Press) Demo
+  description: >
+    Demonstrates progressing a %1RM prescription by an absolute weekly load jump (Smolov Jr style)
+    using `progression: "+5lb every week"` on percent targets.
+
+calendar:
+  start_date: "2026-03-02"
+  end_date: "2026-03-22"
+
+sessions:
+  - id: bench_mon
+    name: Smolov Jr Day 1 (6x6 @70%)
+    schedule: "MON"
+    exercises:
+      - exercise: Barbell Bench Press
+        sets:
+          - shorthand: "6x6 @70%"
+            progression: "+5lb every week"
+
+  - id: bench_wed
+    name: Smolov Jr Day 2 (7x5 @75%)
+    schedule: "WED"
+    exercises:
+      - exercise: Barbell Bench Press
+        sets:
+          - shorthand: "7x5 @75%"
+            progression: "+5lb every week"
+
+  - id: bench_fri
+    name: Smolov Jr Day 3 (8x4 @80%)
+    schedule: "FRI"
+    exercises:
+      - exercise: Barbell Bench Press
+        sets:
+          - shorthand: "8x4 @80%"
+            progression: "+5lb every week"
+
+  - id: bench_sat
+    name: Smolov Jr Day 4 (10x3 @85%)
+    schedule: "SAT"
+    exercises:
+      - exercise: Barbell Bench Press
+        sets:
+          - shorthand: "10x3 @85%"
+            progression: "+5lb every week"
+

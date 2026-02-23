@@ -26,9 +26,15 @@ export type SessionSchedule = IntervalDaysSchedule | WeekdaysSchedule;
 
 export type LoadUnit = "kg" | "lb";
 
+export type LoadDelta = {
+  value: number;
+  unit: LoadUnit;
+};
+
 export type Percent1rmIntensity = {
   type: "percent_1rm";
   value: number;
+  plus_load?: LoadDelta;
 };
 
 export type RpeIntensity = {
@@ -84,7 +90,7 @@ export type ProgressionCondition =
       target?: "value" | "min" | "max";
     };
 
-export type WeeklyIncrementBy = number | { min?: number; max?: number };
+export type WeeklyIncrementBy = number | { min?: number; max?: number } | LoadIntensity;
 
 export type ProgressionCadence =
   | {

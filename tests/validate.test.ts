@@ -472,6 +472,100 @@ Row: 3x10 @RIR2
     const result = validateAst({
       language_version: "0.1",
       metadata: {
+        id: "progression-percent-by-percent",
+        name: "Progression Percent By Percent"
+      },
+      calendar: {
+        start_date: "2026-03-02"
+      },
+      sessions: [
+        {
+          id: "day-1",
+          name: "Day 1",
+          day: 1,
+          exercises: [
+            {
+              exercise: "Barbell Bench Press",
+              sets: [
+                {
+                  count: 6,
+                  reps: 6,
+                  intensity: "70%",
+                  progression: "+2.5% every week"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    });
+
+    assert.equal(result.valid, true);
+    assert.ok(result.value);
+    assert.deepStrictEqual(result.value.sessions[0]?.exercises[0]?.sets[0]?.progression, {
+      type: "increment",
+      when: undefined,
+      by: 2.5,
+      cadence: {
+        type: "weeks",
+        every: 1
+      }
+    });
+  }
+
+  {
+    const result = validateAst({
+      language_version: "0.1",
+      metadata: {
+        id: "progression-percent-by-load",
+        name: "Progression Percent By Load"
+      },
+      calendar: {
+        start_date: "2026-03-02"
+      },
+      sessions: [
+        {
+          id: "day-1",
+          name: "Day 1",
+          day: 1,
+          exercises: [
+            {
+              exercise: "Barbell Bench Press",
+              sets: [
+                {
+                  count: 6,
+                  reps: 6,
+                  intensity: "70%",
+                  progression: "+5lb every week"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    });
+
+    assert.equal(result.valid, true);
+    assert.ok(result.value);
+    assert.deepStrictEqual(result.value.sessions[0]?.exercises[0]?.sets[0]?.progression, {
+      type: "increment",
+      when: undefined,
+      by: {
+        type: "load",
+        value: 5,
+        unit: "lb"
+      },
+      cadence: {
+        type: "weeks",
+        every: 1
+      }
+    });
+  }
+
+  {
+    const result = validateAst({
+      language_version: "0.1",
+      metadata: {
         id: "load-range-object",
         name: "Load Range Object"
       },

@@ -36,4 +36,4 @@ npm.cmd run psl:dev -- print examples/powerlifting_peak.psl.yaml
 
 ## Status
 
-This repository provides a v0.1 specification and a working TypeScript reference implementation (parse/validate/compile/materialize), including scheduling, basic progression (`increment` / `weekly_increment`), and expanded coach-friendly shorthand (see `examples/shorthand_demo.psl.yaml`).
+This repository provides a v0.1 specification and a working TypeScript reference implementation (parse/validate/compile/materialize), including scheduling, progression (`increment` / `weekly_increment`), `%1RM + load offset` targets (`plus_load`), and expanded coach-friendly shorthand (see `examples/shorthand_demo.psl.yaml`).

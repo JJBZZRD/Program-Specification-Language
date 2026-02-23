@@ -20,7 +20,7 @@ Accepted shorthand input shapes:
 - `exercise.sets`: array of sets OR a multiline sets block string
 - Set entries: structured set object, set shorthand string, or shorthand wrapper object (`{ shorthand: "...", ... }`)
 - `set.reps`: integer, `{min,max}`, or shorthand string (e.g. `"8-12"`)
-- `set.intensity`: object or shorthand string (e.g. `"75%"`, `"@RPE8"`, `"150kg"`, `"[100,120]kg"`)
+- `set.intensity`: object or shorthand string (e.g. `"75%"`, `"70%+5lb"`, `"@RPE8"`, `"150kg"`, `"[100,120]kg"`)
 - `exercise.rest_seconds` and `exercise.rest`: integer seconds or a duration string (e.g. `"90s"`, `"2m"`, `"2m30s"`, `"2:30"`)
 - `set.progression`: object or shorthand string (e.g. `"+2.5kg every 3 sessions on FRI if load>=target"`)
 
@@ -42,6 +42,9 @@ Normalization notes:
 ## Intensity
 
 1. `percent_1rm` value: `0 < value <= 150`.
+   - Optional `plus_load`: a load delta applied on top of the computed `%1RM` load.
+     - Shape: `{ value: number, unit: "kg" | "lb" }`
+     - `value` may be positive or negative.
 2. `rpe` value: `1 <= value <= 10`.
 3. `rir` value: `0 <= value <= 6`.
 4. `load` value: `value > 0` and `unit` is `kg` or `lb`.
@@ -65,8 +68,18 @@ Both represent the same increment rule shape; `weekly_increment` defaults to a w
    - Progression may also be provided as a shorthand string; shorthand expands into an `increment` rule with an explicit cadence (default weekly).
 2. `progression` requires `intensity` (there must be a target to increment).
 3. `progression.by` must be:
-   - a number for `percent_1rm`, `rpe`, `rir`, and `load`
-   - a number or an object `{min,max}` (at least one of `min`/`max`) for `load_range`
+   - `percent_1rm` intensity:
+     - a number (percent points, e.g. `+2.5` means `+2.5%1RM`), or
+     - a load delta object `{ type: "load", value: number, unit: "kg" | "lb" }` (adjusts `intensity.plus_load`)
+   - `load` intensity:
+     - a number (same unit as the load target), or
+     - a load delta object `{ type: "load", value: number, unit: "kg" | "lb" }`
+   - `rpe` / `rir` intensity:
+     - a number (RPE/RIR points)
+   - `load_range` intensity:
+     - a number (shifts both `min` and `max`), or
+     - an object `{min,max}` (at least one of `min`/`max`) to shift bounds independently, or
+     - a load delta object `{ type: "load", value: number, unit: "kg" | "lb" }` (shifts both `min` and `max`)
 4. `progression.when` is optional:
    - If omitted, it defaults to `session_success == true` when applying progression.
    - `session_success` checks the session completion `success` boolean (default `true`).

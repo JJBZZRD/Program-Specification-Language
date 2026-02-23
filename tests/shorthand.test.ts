@@ -20,6 +20,32 @@ export function run(): void {
     }
   });
 
+  assert.deepStrictEqual(parseShorthand("6x6 @70% + 5lb"), {
+    count: 6,
+    reps: 6,
+    intensity: {
+      type: "percent_1rm",
+      value: 70,
+      plus_load: {
+        value: 5,
+        unit: "lb"
+      }
+    }
+  });
+
+  assert.deepStrictEqual(parseShorthand("6x6 @70%-2.5kg"), {
+    count: 6,
+    reps: 6,
+    intensity: {
+      type: "percent_1rm",
+      value: 70,
+      plus_load: {
+        value: -2.5,
+        unit: "kg"
+      }
+    }
+  });
+
   assert.deepStrictEqual(parseShorthand("3x8-10 @RPE8"), {
     count: 3,
     reps: {

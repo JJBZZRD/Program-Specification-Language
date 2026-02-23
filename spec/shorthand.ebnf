@@ -22,7 +22,8 @@ reps            = integer | integer, ws?, "-", ws?, integer ;
 intensity_clause= "@", ws?, intensity_expr ;
 intensity_expr  = percent | rpe | rir | load | load_range_bracket | load_range_hyphen ;
 
-percent         = number, ws?, "%", [ws?, "1", ws?, ("RM" | "rm")] ;
+percent         = number, ws?, "%", [ws?, "1", ws?, ("RM" | "rm")], [ws?, percent_offset] ;
+percent_offset  = ("+" | "-"), ws?, number, ws?, unit ;
 rpe             = (("RPE" | "rpe"), ws?, number) | (number, ws?, ("RPE" | "rpe")) ;
 rir             = (("RIR" | "rir"), ws?, number) | (number, ws?, ("RIR" | "rir")) ;
 
@@ -103,9 +104,14 @@ progression_shorthand =
   [ws, weekday_filter],
   [ws, condition] ;
 
-inc_by          = inc_number, [ws?, unit] | inc_range, [ws?, unit] ;
+inc_by          = inc_number, [ws?, inc_unit] | inc_range, [ws?, unit] ;
 inc_number      = ["+" | "-"], number ;
 inc_range       = ["+" | "-"], "[", ws?, number, [ws?, ",", ws?, number], ws?, "]" ;
+
+inc_unit        = unit | pct_unit | rpe_unit | rir_unit ;
+pct_unit        = "%", [ws?, "1", ws?, ("RM" | "rm")] ;
+rpe_unit        = "RPE" | "rpe" ;
+rir_unit        = "RIR" | "rir" ;
 
 cadence         =
   ( "weekly" )
@@ -122,4 +128,3 @@ target_ref      = "target" | "value" | "min" | "max" ;
 
 (* NOTE: weekday tokens may be written as MON/MONDAY/etc, but normalize to MON..SUN in the AST. *)
 weekday         = "MON" | "TUE" | "WED" | "THU" | "FRI" | "SAT" | "SUN" ;
-

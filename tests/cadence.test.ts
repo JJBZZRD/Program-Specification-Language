@@ -199,5 +199,64 @@ export async function run(): Promise<void> {
       155
     );
   }
-}
 
+  {
+    const compiled = compileProgram({
+      language_version: "0.1",
+      metadata: { id: "cadence-percent-load", name: "Cadence Percent Load" },
+      calendar: {
+        start_date: "2026-03-02",
+        end_date: "2026-03-16"
+      },
+      sessions: [
+        {
+          id: "bench-weekly",
+          name: "Bench Weekly",
+          schedule: { type: "weekdays", days: ["MON"] },
+          exercises: [
+            {
+              exercise: "Barbell Bench Press",
+              sets: [
+                {
+                  count: 6,
+                  reps: 6,
+                  intensity: { type: "percent_1rm", value: 70 },
+                  progression: {
+                    type: "increment",
+                    cadence: { type: "weeks", every: 1 },
+                    by: { type: "load", value: 5, unit: "lb" }
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    });
+
+    const completions: SessionCompletion[] = [
+      { session_id: "bench-weekly", date_iso: "2026-03-02", success: true },
+      { session_id: "bench-weekly", date_iso: "2026-03-09", success: true }
+    ];
+
+    const sessions = materialize(compiled, { completions }).filter((session) => session.id === "bench-weekly");
+    const byDate = new Map(sessions.map((session) => [session.date_iso, session]));
+
+    assert.deepStrictEqual(byDate.get("2026-03-02")?.exercises[0]?.sets[0]?.intensity, {
+      type: "percent_1rm",
+      value: 70
+    });
+
+    assert.deepStrictEqual(byDate.get("2026-03-09")?.exercises[0]?.sets[0]?.intensity, {
+      type: "percent_1rm",
+      value: 70,
+      plus_load: { value: 5, unit: "lb" }
+    });
+
+    assert.deepStrictEqual(byDate.get("2026-03-16")?.exercises[0]?.sets[0]?.intensity, {
+      type: "percent_1rm",
+      value: 70,
+      plus_load: { value: 10, unit: "lb" }
+    });
+  }
+}

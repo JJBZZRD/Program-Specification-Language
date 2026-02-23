@@ -1,16 +1,25 @@
 {
   "language_version": "0.1",
-  "source_hash": "05ffceac2dc883c9f88c4446a8e5383df5ae322a31b97056b4c8d8fcd26d9fe2",
+  "source_hash": "99946c9f718056d281b4559568d00ddf91b0b75307387574013871d15badbe94",
   "metadata": {
-    "id": "hypertrophy-4day",
-    "name": "Hypertrophy 4 Day",
-    "description": "Upper/lower split with moderate volume."
+    "id": "smolov_jr_bench_demo",
+    "name": "Smolov Jr (Bench Press) Demo",
+    "description": "Demonstrates progressing a %1RM prescription by an absolute weekly load jump (Smolov Jr style) using `progression: \"+5lb every week\"` on percent targets.\n"
+  },
+  "calendar": {
+    "start_date": "2026-03-02",
+    "end_date": "2026-03-22"
   },
   "sessions": [
     {
-      "id": "day-1",
-      "name": "Upper A",
-      "day": 1,
+      "id": "bench_mon",
+      "name": "Smolov Jr Day 1 (6x6 @70%)",
+      "schedule": {
+        "type": "weekdays",
+        "days": [
+          "MON"
+        ]
+      },
       "exercises": [
         {
           "exercise": "Barbell Bench Press",
@@ -18,94 +27,139 @@
             {
               "index": 1,
               "reps": {
-                "min": 8,
-                "max": 8
+                "min": 6,
+                "max": 6
               },
               "intensity": {
-                "type": "rir",
-                "value": 2
+                "type": "percent_1rm",
+                "value": 70
+              },
+              "progression": {
+                "type": "increment",
+                "by": {
+                  "type": "load",
+                  "value": 5,
+                  "unit": "lb"
+                },
+                "cadence": {
+                  "type": "weeks",
+                  "every": 1
+                }
               }
             },
             {
               "index": 2,
               "reps": {
-                "min": 8,
-                "max": 8
+                "min": 6,
+                "max": 6
               },
               "intensity": {
-                "type": "rir",
-                "value": 2
+                "type": "percent_1rm",
+                "value": 70
+              },
+              "progression": {
+                "type": "increment",
+                "by": {
+                  "type": "load",
+                  "value": 5,
+                  "unit": "lb"
+                },
+                "cadence": {
+                  "type": "weeks",
+                  "every": 1
+                }
               }
             },
             {
               "index": 3,
               "reps": {
-                "min": 8,
-                "max": 8
+                "min": 6,
+                "max": 6
               },
               "intensity": {
-                "type": "rir",
-                "value": 2
+                "type": "percent_1rm",
+                "value": 70
+              },
+              "progression": {
+                "type": "increment",
+                "by": {
+                  "type": "load",
+                  "value": 5,
+                  "unit": "lb"
+                },
+                "cadence": {
+                  "type": "weeks",
+                  "every": 1
+                }
               }
             },
             {
               "index": 4,
               "reps": {
-                "min": 8,
-                "max": 8
+                "min": 6,
+                "max": 6
               },
               "intensity": {
-                "type": "rir",
-                "value": 2
-              }
-            }
-          ]
-        },
-        {
-          "exercise": "Chest Supported Row",
-          "sets": [
-            {
-              "index": 1,
-              "reps": {
-                "min": 10,
-                "max": 10
+                "type": "percent_1rm",
+                "value": 70
               },
-              "intensity": {
-                "type": "rir",
-                "value": 2
+              "progression": {
+                "type": "increment",
+                "by": {
+                  "type": "load",
+                  "value": 5,
+                  "unit": "lb"
+                },
+                "cadence": {
+                  "type": "weeks",
+                  "every": 1
+                }
               }
             },
             {
-              "index": 2,
+              "index": 5,
               "reps": {
-                "min": 10,
-                "max": 10
+                "min": 6,
+                "max": 6
               },
               "intensity": {
-                "type": "rir",
-                "value": 2
+                "type": "percent_1rm",
+                "value": 70
+              },
+              "progression": {
+                "type": "increment",
+                "by": {
+                  "type": "load",
+                  "value": 5,
+                  "unit": "lb"
+                },
+                "cadence": {
+                  "type": "weeks",
+                  "every": 1
+                }
               }
             },
             {
-              "index": 3,
+              "index": 6,
               "reps": {
-                "min": 10,
-                "max": 10
+                "min": 6,
+                "max": 6
               },
               "intensity": {
-                "type": "rir",
-                "value": 2
-              }
-            },
-            {
-              "index": 4,
-              "reps": {
-                "min": 10,
-                "max": 10
+                "type": "percent_1rm",
+                "value": 70
               },
-              "intensity": {
-                "type": "rir",
-                "value": 2
+              "progression": {
+                "type": "increment",
+                "by": {
+                  "type": "load",
+                  "value": 5,
+                  "unit": "lb"
+                },
+                "cadence": {
+                  "type": "weeks",
+                  "every": 1
+                }
               }
             }
           ]
@@ -113,55 +167,625 @@
       ]
     },
     {
-      "id": "day-2",
-      "name": "Lower A",
-      "day": 2,
+      "id": "bench_wed",
+      "name": "Smolov Jr Day 2 (7x5 @75%)",
+      "schedule": {
+        "type": "weekdays",
+        "days": [
+          "WED"
+        ]
+      },
       "exercises": [
         {
-          "exercise": "Back Squat",
+          "exercise": "Barbell Bench Press",
           "sets": [
             {
               "index": 1,
               "reps": {
-                "min": 6,
-                "max": 6
+                "min": 5,
+                "max": 5
               },
               "intensity": {
                 "type": "percent_1rm",
                 "value": 75
+              },
+              "progression": {
+                "type": "increment",
+                "by": {
+                  "type": "load",
+                  "value": 5,
+                  "unit": "lb"
+                },
+                "cadence": {
+                  "type": "weeks",
+                  "every": 1
+                }
               }
             },
             {
               "index": 2,
               "reps": {
-                "min": 6,
-                "max": 6
+                "min": 5,
+                "max": 5
               },
               "intensity": {
                 "type": "percent_1rm",
                 "value": 75
+              },
+              "progression": {
+                "type": "increment",
+                "by": {
+                  "type": "load",
+                  "value": 5,
+                  "unit": "lb"
+                },
+                "cadence": {
+                  "type": "weeks",
+                  "every": 1
+                }
               }
             },
             {
               "index": 3,
               "reps": {
-                "min": 6,
-                "max": 6
+                "min": 5,
+                "max": 5
               },
               "intensity": {
                 "type": "percent_1rm",
                 "value": 75
+              },
+              "progression": {
+                "type": "increment",
+                "by": {
+                  "type": "load",
+                  "value": 5,
+                  "unit": "lb"
+                },
+                "cadence": {
+                  "type": "weeks",
+                  "every": 1
+                }
               }
             },
             {
               "index": 4,
               "reps": {
-                "min": 6,
-                "max": 6
+                "min": 5,
+                "max": 5
               },
               "intensity": {
                 "type": "percent_1rm",
                 "value": 75
+              },
+              "progression": {
+                "type": "increment",
+                "by": {
+                  "type": "load",
+                  "value": 5,
+                  "unit": "lb"
+                },
+                "cadence": {
+                  "type": "weeks",
+                  "every": 1
+                }
+              }
+            },
+            {
+              "index": 5,
+              "reps": {
+                "min": 5,
+                "max": 5
+              },
+              "intensity": {
+                "type": "percent_1rm",
+                "value": 75
+              },
+              "progression": {
+                "type": "increment",
+                "by": {
+                  "type": "load",
+                  "value": 5,
+                  "unit": "lb"
+                },
+                "cadence": {
+                  "type": "weeks",
+                  "every": 1
+                }
+              }
+            },
+            {
+              "index": 6,
+              "reps": {
+                "min": 5,
+                "max": 5
+              },
+              "intensity": {
+                "type": "percent_1rm",
+                "value": 75
+              },
+              "progression": {
+                "type": "increment",
+                "by": {
+                  "type": "load",
+                  "value": 5,
+                  "unit": "lb"
+                },
+                "cadence": {
+                  "type": "weeks",
+                  "every": 1
+                }
+              }
+            },
+            {
+              "index": 7,
+              "reps": {
+                "min": 5,
+                "max": 5
+              },
+              "intensity": {
+                "type": "percent_1rm",
+                "value": 75
+              },
+              "progression": {
+                "type": "increment",
+                "by": {
+                  "type": "load",
+                  "value": 5,
+                  "unit": "lb"
+                },
+                "cadence": {
+                  "type": "weeks",
+                  "every": 1
+                }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "bench_fri",
+      "name": "Smolov Jr Day 3 (8x4 @80%)",
+      "schedule": {
+        "type": "weekdays",
+        "days": [
+          "FRI"
+        ]
+      },
+      "exercises": [
+        {
+          "exercise": "Barbell Bench Press",
+          "sets": [
+            {
+              "index": 1,
+              "reps": {
+                "min": 4,
+                "max": 4
+              },
+              "intensity": {
+                "type": "percent_1rm",
+                "value": 80
+              },
+              "progression": {
+                "type": "increment",
+                "by": {
+                  "type": "load",
+                  "value": 5,
+                  "unit": "lb"
+                },
+                "cadence": {
+                  "type": "weeks",
+                  "every": 1
+                }
+              }
+            },
+            {
+              "index": 2,
+              "reps": {
+                "min": 4,
+                "max": 4
+              },
+              "intensity": {
+                "type": "percent_1rm",
+                "value": 80
+              },
+              "progression": {
+                "type": "increment",
+                "by": {
+                  "type": "load",
+                  "value": 5,
+                  "unit": "lb"
+                },
+                "cadence": {
+                  "type": "weeks",
+                  "every": 1
+                }
+              }
+            },
+            {
+              "index": 3,
+              "reps": {
+                "min": 4,
+                "max": 4
+              },
+              "intensity": {
+                "type": "percent_1rm",
+                "value": 80
+              },
+              "progression": {
+                "type": "increment",
+                "by": {
+                  "type": "load",
+                  "value": 5,
+                  "unit": "lb"
+                },
+                "cadence": {
+                  "type": "weeks",
+                  "every": 1
+                }
+              }
+            },
+            {
+              "index": 4,
+              "reps": {
+                "min": 4,
+                "max": 4
+              },
+              "intensity": {
+                "type": "percent_1rm",
+                "value": 80
+              },
+              "progression": {
+                "type": "increment",
+                "by": {
+                  "type": "load",
+                  "value": 5,
+                  "unit": "lb"
+                },
+                "cadence": {
+                  "type": "weeks",
+                  "every": 1
+                }
+              }
+            },
+            {
+              "index": 5,
+              "reps": {
+                "min": 4,
+                "max": 4
+              },
+              "intensity": {
+                "type": "percent_1rm",
+                "value": 80
+              },
+              "progression": {
+                "type": "increment",
+                "by": {
+                  "type": "load",
+                  "value": 5,
+                  "unit": "lb"
+                },
+                "cadence": {
+                  "type": "weeks",
+                  "every": 1
+                }
+              }
+            },
+            {
+              "index": 6,
+              "reps": {
+                "min": 4,
+                "max": 4
+              },
+              "intensity": {
+                "type": "percent_1rm",
+                "value": 80
+              },
+              "progression": {
+                "type": "increment",
+                "by": {
+                  "type": "load",
+                  "value": 5,
+                  "unit": "lb"
+                },
+                "cadence": {
+                  "type": "weeks",
+                  "every": 1
+                }
+              }
+            },
+            {
+              "index": 7,
+              "reps": {
+                "min": 4,
+                "max": 4
+              },
+              "intensity": {
+                "type": "percent_1rm",
+                "value": 80
+              },
+              "progression": {
+                "type": "increment",
+                "by": {
+                  "type": "load",
+                  "value": 5,
+                  "unit": "lb"
+                },
+                "cadence": {
+                  "type": "weeks",
+                  "every": 1
+                }
+              }
+            },
+            {
+              "index": 8,
+              "reps": {
+                "min": 4,
+                "max": 4
+              },
+              "intensity": {
+                "type": "percent_1rm",
+                "value": 80
+              },
+              "progression": {
+                "type": "increment",
+                "by": {
+                  "type": "load",
+                  "value": 5,
+                  "unit": "lb"
+                },
+                "cadence": {
+                  "type": "weeks",
+                  "every": 1
+                }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "bench_sat",
+      "name": "Smolov Jr Day 4 (10x3 @85%)",
+      "schedule": {
+        "type": "weekdays",
+        "days": [
+          "SAT"
+        ]
+      },
+      "exercises": [
+        {
+          "exercise": "Barbell Bench Press",
+          "sets": [
+            {
+              "index": 1,
+              "reps": {
+                "min": 3,
+                "max": 3
+              },
+              "intensity": {
+                "type": "percent_1rm",
+                "value": 85
+              },
+              "progression": {
+                "type": "increment",
+                "by": {
+                  "type": "load",
+                  "value": 5,
+                  "unit": "lb"
+                },
+                "cadence": {
+                  "type": "weeks",
+                  "every": 1
+                }
+              }
+            },
+            {
+              "index": 2,
+              "reps": {
+                "min": 3,
+                "max": 3
+              },
+              "intensity": {
+                "type": "percent_1rm",
+                "value": 85
+              },
+              "progression": {
+                "type": "increment",
+                "by": {
+                  "type": "load",
+                  "value": 5,
+                  "unit": "lb"
+                },
+                "cadence": {
+                  "type": "weeks",
+                  "every": 1
+                }
+              }
+            },
+            {
+              "index": 3,
+              "reps": {
+                "min": 3,
+                "max": 3
+              },
+              "intensity": {
+                "type": "percent_1rm",
+                "value": 85
+              },
+              "progression": {
+                "type": "increment",
+                "by": {
+                  "type": "load",
+                  "value": 5,
+                  "unit": "lb"
+                },
+                "cadence": {
+                  "type": "weeks",
+                  "every": 1
+                }
+              }
+            },
+            {
+              "index": 4,
+              "reps": {
+                "min": 3,
+                "max": 3
+              },
+              "intensity": {
+                "type": "percent_1rm",
+                "value": 85
+              },
+              "progression": {
+                "type": "increment",
+                "by": {
+                  "type": "load",
+                  "value": 5,
+                  "unit": "lb"
+                },
+                "cadence": {
+                  "type": "weeks",
+                  "every": 1
+                }
+              }
+            },
+            {
+              "index": 5,
+              "reps": {
+                "min": 3,
+                "max": 3
+              },
+              "intensity": {
+                "type": "percent_1rm",
+                "value": 85
+              },
+              "progression": {
+                "type": "increment",
+                "by": {
+                  "type": "load",
+                  "value": 5,
+                  "unit": "lb"
+                },
+                "cadence": {
+                  "type": "weeks",
+                  "every": 1
+                }
+              }
+            },
+            {
+              "index": 6,
+              "reps": {
+                "min": 3,
+                "max": 3
+              },
+              "intensity": {
+                "type": "percent_1rm",
+                "value": 85
+              },
+              "progression": {
+                "type": "increment",
+                "by": {
+                  "type": "load",
+                  "value": 5,
+                  "unit": "lb"
+                },
+                "cadence": {
+                  "type": "weeks",
+                  "every": 1
+                }
+              }
+            },
+            {
+              "index": 7,
+              "reps": {
+                "min": 3,
+                "max": 3
+              },
+              "intensity": {
+                "type": "percent_1rm",
+                "value": 85
+              },
+              "progression": {
+                "type": "increment",
+                "by": {
+                  "type": "load",
+                  "value": 5,
+                  "unit": "lb"
+                },
+                "cadence": {
+                  "type": "weeks",
+                  "every": 1
+                }
+              }
+            },
+            {
+              "index": 8,
+              "reps": {
+                "min": 3,
+                "max": 3
+              },
+              "intensity": {
+                "type": "percent_1rm",
+                "value": 85
+              },
+              "progression": {
+                "type": "increment",
+                "by": {
+                  "type": "load",
+                  "value": 5,
+                  "unit": "lb"
+                },
+                "cadence": {
+                  "type": "weeks",
+                  "every": 1
+                }
+              }
+            },
+            {
+              "index": 9,
+              "reps": {
+                "min": 3,
+                "max": 3
+              },
+              "intensity": {
+                "type": "percent_1rm",
+                "value": 85
+              },
+              "progression": {
+                "type": "increment",
+                "by": {
+                  "type": "load",
+                  "value": 5,
+                  "unit": "lb"
+                },
+                "cadence": {
+                  "type": "weeks",
+                  "every": 1
+                }
+              }
+            },
+            {
+              "index": 10,
+              "reps": {
+                "min": 3,
+                "max": 3
+              },
+              "intensity": {
+                "type": "percent_1rm",
+                "value": 85
+              },
+              "progression": {
+                "type": "increment",
+                "by": {
+                  "type": "load",
+                  "value": 5,
+                  "unit": "lb"
+                },
+                "cadence": {
+                  "type": "weeks",
+                  "every": 1
+                }
               }
             }
           ]

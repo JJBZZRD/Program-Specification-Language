@@ -95,6 +95,24 @@ export function parseIntensityExpression(raw: string): IntensityTarget {
     };
   }
 
+  const percentPlusLoadMatch = normalized.match(
+    /^(?<percent>\d+(?:\.\d+)?)\s*%\s*(?:1\s*rm)?\s*(?<sign>[+-])\s*(?<offset>\d+(?:\.\d+)?)\s*(?<unit>kg|kgs|lb|lbs)$/i
+  );
+  if (
+    percentPlusLoadMatch?.groups?.percent !== undefined &&
+    percentPlusLoadMatch.groups.sign !== undefined &&
+    percentPlusLoadMatch.groups.offset !== undefined &&
+    percentPlusLoadMatch.groups.unit !== undefined
+  ) {
+    const unit = normalizeLoadUnit(percentPlusLoadMatch.groups.unit);
+    const sign = percentPlusLoadMatch.groups.sign === "-" ? -1 : 1;
+    return {
+      type: "percent_1rm",
+      value: Number(percentPlusLoadMatch.groups.percent),
+      plus_load: { value: Number(percentPlusLoadMatch.groups.offset) * sign, unit }
+    };
+  }
+
   const percentMatch = normalized.match(/^(?<value>\d+(?:\.\d+)?)\s*%\s*(?:1\s*rm)?$/i);
   if (percentMatch?.groups?.value !== undefined) {
     return { type: "percent_1rm", value: Number(percentMatch.groups.value) };
@@ -157,4 +175,3 @@ export function parseShorthand(input: string): SetPrescription {
     intensity
   };
 }
-
