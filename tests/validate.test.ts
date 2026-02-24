@@ -1378,4 +1378,76 @@ Row: 3x10 @RIR2
     assert.ok(result.value);
     assert.equal(result.value.sessions[0]?.exercises[0]?.sets[0]?.rest_seconds, 120);
   }
+
+  {
+    const result = validateAst({
+      language_version: "0.2",
+      metadata: {
+        id: "v0-2-inline-progression-exercise-shorthand",
+        name: "v0.2 Inline Progression Exercise Shorthand"
+      },
+      calendar: {
+        start_date: "2026-03-02"
+      },
+      sessions: [
+        {
+          id: "s1",
+          name: "S1",
+          day: 1,
+          exercises: ["Romanian Deadlift: 3x8 @100kg; rest 2m; +2.5kg every 2 weeks if success"]
+        }
+      ]
+    });
+
+    assert.equal(result.valid, true);
+    assert.ok(result.value);
+    const exercise = result.value.sessions[0]?.exercises[0];
+    assert.equal(exercise?.rest_seconds, 120);
+    assert.deepStrictEqual(exercise?.sets[0]?.progression, {
+      type: "increment",
+      when: {
+        type: "session_success",
+        equals: true
+      },
+      by: 2.5,
+      cadence: {
+        type: "weeks",
+        every: 2
+      }
+    });
+  }
+
+  {
+    const result = validateAst({
+      language_version: "0.2",
+      metadata: {
+        id: "v0-2-inline-progression-sets-block",
+        name: "v0.2 Inline Progression Sets Block"
+      },
+      calendar: {
+        start_date: "2026-03-02"
+      },
+      sessions: [
+        {
+          id: "s1",
+          name: "S1",
+          day: 1,
+          exercises: [
+            {
+              exercise: "Bench Press",
+              sets: `
+1x4 @75% role top; +1.25kg every week if success
+4x6 @-8% backoff
+`
+            }
+          ]
+        }
+      ]
+    });
+
+    assert.equal(result.valid, true);
+    assert.ok(result.value);
+    assert.equal(result.value.sessions[0]?.exercises[0]?.sets[0]?.progression?.type, "increment");
+    assert.equal(result.value.sessions[0]?.exercises[0]?.sets[1]?.intensity?.type, "percent_of_set");
+  }
 }

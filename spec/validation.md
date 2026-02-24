@@ -21,6 +21,9 @@ v0.2 keeps v0.1 shorthand and adds time and constraint clauses.
   - `@-12%` / `@+5%` (normalized as `percent_of_set` from role `top` by default)
   - `@-10kg` / `@+5lb` (normalized as `load_delta_from_set` from role `top` by default)
   - optional explicit role: `@-12% from top`.
+- Inline progression shorthand segments are allowed in set/exercise shorthand blocks:
+  - `1x4 @75%; +2.5kg every week if success`
+  - attaches to the immediately preceding set shorthand.
 - Multiline shorthand diagnostics annotate line locations via `[line N]`.
 
 ## Exercise Identity and Aliases
@@ -118,6 +121,7 @@ Rules:
 3. `calendar` is required when executable progression is used.
 4. `progression.when` and `progression.criteria.condition` cannot both be defined.
 5. `scope` (if provided) must be `set | exercise | session`.
+6. Inline progression shorthand must follow a set shorthand in the same block; duplicate inline progression on one set is invalid.
 
 ### Declarative-only progression (v0.2 shape, v0.3 runtime)
 

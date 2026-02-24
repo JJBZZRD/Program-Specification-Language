@@ -697,6 +697,17 @@ Add intensity with `@...`:
 - `5x5 @75%`
 - `3x8-10 @RPE8`
 
+Inline progression can also be authored directly in set shorthand blocks/strings by adding a semicolon progression segment after a set:
+
+- `1x4 @75%; +2.5kg every week if success`
+- `3x8 @100kg; +2.5kg every 2 weeks if success`
+
+Inline progression segment rule:
+
+- It attaches to the immediately preceding set in the same shorthand block.
+- It must follow a set (not start a block).
+- It uses the same grammar as `set.progression` shorthand.
+
 ### Intensity shorthand
 
 Percent / percent+offset:
@@ -795,6 +806,15 @@ exercises:
   - "Bench Press: 5x5 @75%; 1x5 @80%; rest 2m"
 ```
 
+Exercise shorthand also supports inline progression segments for the previous set:
+
+```yaml
+exercises:
+  - "Romanian Deadlift: 3x8 @100kg; rest 2m; +2.5kg every 2 weeks if success"
+```
+
+In that example, `+2.5kg every 2 weeks if success` applies to the `3x8 @100kg` set.
+
 Multiline:
 
 ```yaml
@@ -854,6 +874,8 @@ Defaults:
 - Missing cadence -> weekly.
 - Missing condition -> `session_success == true`.
 
+Inline progression in set/exercise shorthand uses the exact same progression grammar.
+
 ### Shorthand recipes coaches actually use
 
 #### Top set + backoffs
@@ -905,6 +927,9 @@ If shorthand fails validation:
    - Missing `@` before intensity token.
    - Invalid duration token (`8min` is invalid; use `8m`).
    - Role reference appears before any set with that role.
+   - Inline progression appears before any set in the shorthand block.
+   - Inline progression provided more than once for the same set.
+   - `+kg`/`+lb` progression with non-load targets (for RPE/RIR targets, use numeric point changes or prescribe a load/percent target).
    - Mixed structured and shorthand fields in one set object (`shorthand` + `count/reps/intensity`).
    - Using time-only fields with `work_type: reps`.
 

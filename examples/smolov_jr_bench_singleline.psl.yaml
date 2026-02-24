@@ -1,0 +1,34 @@
+language_version: "0.2"
+metadata:
+  id: smolov-jr-bench-singleline
+  name: Smolov Jr Bench (Singleline Shorthand)
+  description: Classic Smolov Jr bench template authored with singleline shorthand and inline progression.
+  author: PSL Coaching Example
+units: lb
+calendar:
+  start_date: "2026-03-02"
+  end_date: "2026-03-22"
+sessions:
+  - id: bench_mon
+    name: Smolov Jr Day 1 (6x6 @70%)
+    schedule: "MON"
+    exercises:
+      - "Barbell Bench Press: 6x6 @70%; +5lb every week if success; rest 3m"
+
+  - id: bench_wed
+    name: Smolov Jr Day 2 (7x5 @75%)
+    schedule: "WED"
+    exercises:
+      - "Barbell Bench Press: 7x5 @75%; +5lb every week if success; rest 3m"
+
+  - id: bench_fri
+    name: Smolov Jr Day 3 (8x4 @80%)
+    schedule: "FRI"
+    exercises:
+      - "Barbell Bench Press: 8x4 @80%; +5lb every week if success; rest 4m"
+
+  - id: bench_sat
+    name: Smolov Jr Day 4 (10x3 @85%)
+    schedule: "SAT"
+    exercises:
+      - "Barbell Bench Press: 10x3 @85%; +5lb every week if success; rest 4m"

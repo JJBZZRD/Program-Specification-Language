@@ -1500,6 +1500,9 @@ function parseSetShorthandBlock(raw: string, path: string, diagnostics: Diagnost
   const sets: SetPrescription[] = [];
   const annotateLinePaths = /[\r\n]/.test(raw) || raw.includes(";");
   const lines = raw.split(/\r?\n/);
+  let lastSet: SetPrescription | undefined;
+
+  const looksLikeProgressionShorthand = (entry: string): boolean => /^[+-]\s*\d/.test(entry.trim());
 
   lines.forEach((line, lineIndex) => {
     const lineNumber = lineIndex + 1;
@@ -1527,9 +1530,36 @@ function parseSetShorthandBlock(raw: string, path: string, diagnostics: Diagnost
         return;
       }
 
+      const linePath = annotateLinePaths ? `${path}[line ${lineNumber}]` : path;
+
+      if (looksLikeProgressionShorthand(entry)) {
+        if (!lastSet) {
+          addError(
+            diagnostics,
+            `${linePath}.progression`,
+            "Inline progression shorthand must follow a set shorthand in the same block."
+          );
+          return;
+        }
+
+        if (lastSet.progression !== undefined) {
+          addError(
+            diagnostics,
+            `${linePath}.progression`,
+            "Set already has progression; remove duplicate inline progression shorthand."
+          );
+          return;
+        }
+
+        const progression = parseProgression(entry, lastSet.intensity, `${linePath}.progression`, diagnostics);
+        if (progression) {
+          lastSet.progression = progression;
+        }
+        return;
+      }
+
       try {
         const parsed = parseShorthand(entry);
-        const linePath = annotateLinePaths ? `${path}[line ${lineNumber}]` : path;
         const intensity = parseIntensity(parsed.intensity, `${linePath}.intensity`, diagnostics);
         if (parsed.intensity !== undefined && intensity === undefined) {
           return;
@@ -1539,6 +1569,7 @@ function parseSetShorthandBlock(raw: string, path: string, diagnostics: Diagnost
           setValue.note = note;
         }
         sets.push(setValue);
+        lastSet = setValue;
       } catch (error) {
         const message = error instanceof Error ? error.message : "Invalid shorthand expression.";
         addError(diagnostics, annotateLinePaths ? `${path}[line ${lineNumber}]` : path, message);

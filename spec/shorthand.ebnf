@@ -75,7 +75,11 @@ rest_after_clause = ("rest_after" | "after"), ws?, [":" | "="], ws?, duration ;
 (* -------------------------------------------------------------------------- *)
 
 sets_block        = set_line, { nl, set_line } ;
-set_line          = [ws], ["-", ws], set_shorthand, [ws, "#", ws, note] ;
+set_line          =
+  [ws], ["-", ws],
+  set_shorthand,
+  { ws?, ";", ws?, (set_shorthand | progression_shorthand) },
+  [ws, "#", ws, note] ;
 note              = { ? any character except newline ? } ;
 
 (* -------------------------------------------------------------------------- *)
@@ -88,7 +92,7 @@ exercise_shorthand =
   exercise_sets_inline,
   [ws?, ";", ws?, rest_clause] ;
 
-exercise_sets_inline = set_shorthand, { ws?, ";", ws?, set_shorthand } ;
+exercise_sets_inline = set_shorthand, { ws?, ";", ws?, (set_shorthand | progression_shorthand) } ;
 exercise_name        = { ? any character except newline ? } ;
 
 exercise_block     = exercise_header, { nl, (set_line | rest_line) } ;

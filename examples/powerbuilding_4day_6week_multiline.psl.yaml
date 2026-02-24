@@ -1,0 +1,138 @@
+language_version: "0.2"
+metadata:
+  id: powerbuilding-4day-6week-multiline
+  name: Powerbuilding 4 Day (6 Weeks, Multiline Shorthand)
+  description: Realistic coach-authored powerbuilding split using multiline shorthand with conservative compound progression.
+  author: PSL Coaching Example
+units: kg
+rounding:
+  round_to: 2.5
+  mode: nearest
+calendar:
+  start_date: "2026-03-02"
+  end_date: "2026-04-12"
+sessions:
+  - id: mon-push-back-arms
+    name: Monday - Push, Back, Arms
+    schedule: "MON"
+    rest_default: "90s"
+    exercises:
+      - exercise: Competition Bench Press
+        exercise_id: bench_comp
+        rest: "3m"
+        sets: |
+          1x4 @77.5% role top; +1.25kg every week if success
+          4x6 @-8% backoff
+      - |
+        Weighted Pull-Up:
+          4x6-8 @RIR2
+          rest 2m
+      - |
+        Incline Dumbbell Press:
+          3x8-10 @RIR2
+          rest 2m
+      - |
+        Chest Supported Row:
+          3x10-12 @RIR2
+          rest 90s
+      - |
+        Cable Triceps Pressdown:
+          3x12-15 @RIR1
+          rest 75s
+      - |
+        Incline Dumbbell Curl:
+          3x10-12 @RIR1
+          rest 75s
+
+  - id: wed-arms-deadlift-legs-shoulders
+    name: Wednesday - Arms/Deadlift, Legs, Shoulders
+    schedule: "WED"
+    rest_default: "90s"
+    exercises:
+      - exercise: Conventional Deadlift
+        exercise_id: deadlift_comp
+        rest: "3m"
+        sets: |
+          1x4 @75% role top; +2.5kg every week if success
+          3x5 @-10% backoff
+      - exercise: Standing Barbell Overhead Press
+        exercise_id: ohp_comp
+        rest: "2m30s"
+        sets: |
+          4x6 @70% role work; +1kg every week if success
+      - |
+        Front Squat:
+          3x6-8 @RIR2
+          rest 2m30s
+      - |
+        Lying Leg Curl:
+          3x10-12 @RIR1
+          rest 90s
+      - |
+        Dumbbell Lateral Raise:
+          4x12-15 @RIR1
+          rest 75s
+      - |
+        Overhead Rope Triceps Extension:
+          3x10-12 @RIR1
+          rest 75s
+
+  - id: fri-push-back-arms-legs
+    name: Friday - Push, Back, Arms/Legs
+    schedule: "FRI"
+    rest_default: "90s"
+    exercises:
+      - exercise: Close Grip Bench Press
+        exercise_id: bench_close_grip
+        rest: "2m30s"
+        sets: |
+          4x6 @72.5% role work; +1.25kg every week if success
+      - exercise: Pendlay Row
+        exercise_id: row_pendlay
+        rest: "2m30s"
+        sets: |
+          4x6 @70% role work; +2.5kg every 2 weeks if success
+      - |
+        Romanian Deadlift:
+          3x8 @RIR2
+          rest 2m
+      - |
+        Walking Lunge:
+          3x10-12 @RIR2
+          rest 90s
+      - |
+        EZ-Bar Curl:
+          3x10-12 @RIR1
+          rest 75s
+      - |
+        Cable Skull Crusher:
+          3x10-12 @RIR1
+          rest 75s
+
+  - id: sun-lower-body
+    name: Sunday - Lower Body
+    schedule: "SUN"
+    rest_default: "90s"
+    exercises:
+      - exercise: Competition Back Squat
+        exercise_id: squat_comp
+        rest: "3m"
+        sets: |
+          1x5 @75% role top; +2.5kg every week if success
+          4x6 @-10% backoff
+      - |
+        Paused Back Squat:
+          3x4 @RIR2
+          rest 2m30s
+      - |
+        Leg Press:
+          3x10-12 @RIR2
+          rest 2m
+      - |
+        Seated Leg Curl:
+          3x10-12 @RIR1
+          rest 90s
+      - |
+        Standing Calf Raise:
+          4x10-12 @RIR1
+          rest 60s
