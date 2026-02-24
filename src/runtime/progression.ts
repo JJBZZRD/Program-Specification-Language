@@ -12,10 +12,12 @@ export interface SetCompletion {
   load?: CompletedLoad;
   rpe?: number;
   rir?: number;
+  reps_completed?: number;
 }
 
 export interface ExerciseCompletion {
-  exercise: string;
+  exercise?: string;
+  exercise_id?: string;
   sets?: SetCompletion[];
 }
 
@@ -25,4 +27,3 @@ export interface SessionCompletion {
   success?: boolean;
   exercises?: ExerciseCompletion[];
 }
-

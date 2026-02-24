@@ -15,10 +15,19 @@
 
 ## v0.2 Language Growth
 
-- Add additional progression strategy objects (beyond basic increment rules)
-- Add richer progression conditions (all-sets vs any-sets, per-exercise aggregation)
-- Add exercise families and substitution rules
-- Add richer diagnostics and source mapping
+- Expand exercise identity (`exercise_id`) and alias normalization
+- Add role-aware set semantics (warmup/top/backoff/work/amrap/etc.)
+- Add warmup specifications and role-referenced intensities
+- Add grouping (`superset`/`circuit`/`giant_set`) and rest loci inheritance
+- Add time-based prescriptions (`AMRAP`, `EMOM`, `for_time`, `density`)
+- Add declarative constraints and repeat/termination representation
+- Expand progression shape (`scope`, `criteria.aggregation`, `auto_adjust`, actions)
+- Add deload/fatigue modifiers (`volume_multiplier`, `intensity_cap`, `exercise_swap_map`)
+- Add multi-session per day slotting (`session.slot`)
+- Add exercise families/tags/substitutions declarative model
+- Add units/rounding policies at global and exercise scopes
+- Add tempo/execution metadata
+- Improve shorthand diagnostics and source mapping
 
 ## v0.3 Runtime Rules
 

@@ -4,6 +4,7 @@ import type {
   LoadUnit,
   ProgressionCondition,
   ProgressionRule,
+  WeeklyIncrementBy,
   Weekday
 } from "../ast/types.js";
 import type { SessionCompletion, SetCompletion } from "../runtime/progression.js";
@@ -18,6 +19,8 @@ export interface MaterializedSession extends CompiledSession {
 export interface MaterializeOptions {
   completions?: SessionCompletion[];
 }
+
+type IncrementRule = Extract<ProgressionRule, { type: "increment" | "weekly_increment" }>;
 
 const WEEKDAY_BY_UTC_DAY: readonly Weekday[] = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
 
@@ -73,10 +76,27 @@ function cloneIntensity(intensity: IntensityTarget | undefined): IntensityTarget
     return { type: "load", value: intensity.value, unit: intensity.unit };
   }
 
-  return { type: "load_range", min: intensity.min, max: intensity.max, unit: intensity.unit };
+  if (intensity.type === "load_range") {
+    return { type: "load_range", min: intensity.min, max: intensity.max, unit: intensity.unit };
+  }
+
+  if (intensity.type === "percent_of_set") {
+    return { type: "percent_of_set", role: intensity.role, value: intensity.value };
+  }
+
+  return {
+    type: "load_delta_from_set",
+    role: intensity.role,
+    value: intensity.value,
+    unit: intensity.unit
+  };
 }
 
-function isLoadBy(by: ProgressionRule["by"]): by is { type: "load"; value: number; unit: LoadUnit } {
+function isIncrementRule(rule: ProgressionRule | undefined): rule is IncrementRule {
+  return rule?.type === "increment" || rule?.type === "weekly_increment";
+}
+
+function isLoadBy(by: WeeklyIncrementBy): by is { type: "load"; value: number; unit: LoadUnit } {
   return (
     typeof by === "object" &&
     by !== null &&
@@ -115,15 +135,50 @@ function cloneSession(session: CompiledSession): CompiledSession {
     id: session.id,
     name: session.name,
     day: session.day,
+    slot: session.slot,
+    rest_default_seconds: session.rest_default_seconds,
+    groups: session.groups,
+    constraints: session.constraints,
+    modifiers: session.modifiers,
+    block_id: session.block_id,
     schedule: cloneSchedule(session),
     exercises: session.exercises.map((exercise) => ({
       exercise: exercise.exercise,
+      exercise_id: exercise.exercise_id,
+      family: exercise.family,
+      tags: exercise.tags,
+      modifiers: exercise.modifiers,
+      substitutions: exercise.substitutions,
+      constraints: exercise.constraints,
+      warmup: exercise.warmup,
+      group_id: exercise.group_id,
       rest_seconds: exercise.rest_seconds,
+      rest_before_seconds: exercise.rest_before_seconds,
+      rest_after_seconds: exercise.rest_after_seconds,
+      tempo: exercise.tempo,
+      pause_seconds: exercise.pause_seconds,
+      eccentric_seconds: exercise.eccentric_seconds,
+      units: exercise.units,
+      rounding: exercise.rounding,
       sets: exercise.sets.map((set) => ({
         index: set.index,
-        reps: { ...set.reps },
+        reps: set.reps ? { ...set.reps } : undefined,
+        work_type: set.work_type,
+        time_mode: set.time_mode,
+        duration_seconds: set.duration_seconds,
+        interval_seconds: set.interval_seconds,
+        target_total_reps: set.target_total_reps,
         intensity: cloneIntensity(set.intensity),
+        role: set.role,
+        rest_seconds: set.rest_seconds,
+        rest_before_seconds: set.rest_before_seconds,
+        rest_after_seconds: set.rest_after_seconds,
+        constraints: set.constraints,
+        repeat: set.repeat,
         progression: set.progression,
+        tempo: set.tempo,
+        pause_seconds: set.pause_seconds,
+        eccentric_seconds: set.eccentric_seconds,
         note: set.note
       }))
     }))
@@ -148,7 +203,7 @@ function makeCompletionKey(sessionId: string, dateIso: string): CompletionKey {
 
 type SetProgressionState = {
   base: IntensityTarget;
-  rule: ProgressionRule;
+  rule: IncrementRule;
   success_units: number;
 };
 
@@ -171,7 +226,7 @@ function compare(op: ComparisonOp, left: number, right: number): boolean {
   return left !== right;
 }
 
-function applyWeeklyIncrement(base: IntensityTarget, by: ProgressionRule["by"], times: number): IntensityTarget {
+function applyWeeklyIncrement(base: IntensityTarget, by: WeeklyIncrementBy, times: number): IntensityTarget {
   if (times <= 0) {
     return cloneIntensity(base)!;
   }
@@ -261,7 +316,7 @@ function applyWeeklyIncrement(base: IntensityTarget, by: ProgressionRule["by"], 
     throw new Error("Invalid progression.by: expected number or load delta for load intensity.");
   }
 
-  throw new Error("Invalid progression.by: unsupported intensity type.");
+  return cloneIntensity(base)!;
 }
 
 type ResolvedCadence = {
@@ -270,7 +325,7 @@ type ResolvedCadence = {
   on_weekdays?: Weekday[];
 };
 
-function resolveCadence(rule: ProgressionRule): ResolvedCadence {
+function resolveCadence(rule: IncrementRule): ResolvedCadence {
   const cadence = rule.cadence;
   if (!cadence) {
     return { type: "weeks", every: 1 };
@@ -343,6 +398,20 @@ function ensureValidIntensity(intensity: IntensityTarget, context: string): void
     return;
   }
 
+  if (intensity.type === "percent_of_set") {
+    if (!(intensity.value > 0)) {
+      throw new Error(`${context}: percent_of_set intensity must be > 0.`);
+    }
+    return;
+  }
+
+  if (intensity.type === "load_delta_from_set") {
+    if (!Number.isFinite(intensity.value)) {
+      throw new Error(`${context}: load_delta_from_set value must be finite.`);
+    }
+    return;
+  }
+
   if (!(intensity.min > 0)) {
     throw new Error(`${context}: load_range intensity min must be > 0.`);
   }
@@ -355,6 +424,7 @@ function ensureValidIntensity(intensity: IntensityTarget, context: string): void
 function findSetCompletion(
   completion: SessionCompletion,
   exerciseName: string,
+  exerciseId: string | undefined,
   setIndex: number
 ): SetCompletion | undefined {
   const exercises = completion.exercises;
@@ -362,7 +432,11 @@ function findSetCompletion(
     return undefined;
   }
 
-  const exercise = exercises.find((entry) => entry.exercise === exerciseName);
+  const exercise = exercises.find(
+    (entry) =>
+      (exerciseId !== undefined && entry.exercise_id !== undefined && entry.exercise_id === exerciseId) ||
+      entry.exercise === exerciseName
+  );
   const sets = exercise?.sets;
   if (!sets) {
     return undefined;
@@ -371,7 +445,7 @@ function findSetCompletion(
   return sets.find((entry) => entry.index === setIndex);
 }
 
-function resolveCondition(rule: ProgressionRule): ProgressionCondition {
+function resolveCondition(rule: IncrementRule): ProgressionCondition {
   return rule.when ?? { type: "session_success", equals: true };
 }
 
@@ -387,7 +461,9 @@ function getNumericTarget(intensity: IntensityTarget, condition: Extract<Progres
   }
 
   if (targetRef === "value") {
-    return intensity.type === "load_range" ? undefined : intensity.value;
+    return intensity.type === "load_range" || intensity.type === "percent_of_set" || intensity.type === "load_delta_from_set"
+      ? undefined
+      : intensity.value;
   }
 
   return undefined;
@@ -397,6 +473,7 @@ function evaluateCondition(
   condition: ProgressionCondition,
   completion: SessionCompletion,
   exerciseName: string,
+  exerciseId: string | undefined,
   setIndex: number,
   targetIntensity: IntensityTarget
 ): boolean {
@@ -406,12 +483,16 @@ function evaluateCondition(
     return actual === desired;
   }
 
+  if (condition.type === "aggregate_metric") {
+    return false;
+  }
+
   const target = getNumericTarget(targetIntensity, condition);
   if (target === undefined) {
     return false;
   }
 
-  const setCompletion = findSetCompletion(completion, exerciseName, setIndex);
+  const setCompletion = findSetCompletion(completion, exerciseName, exerciseId, setIndex);
   if (!setCompletion) {
     return false;
   }
@@ -485,7 +566,7 @@ function applyProgression(
     session.exercises.forEach((exercise, exerciseIndex) => {
       exercise.sets.forEach((set) => {
         const rule = set.progression;
-        if (!rule) {
+        if (!isIncrementRule(rule)) {
           return;
         }
 
@@ -493,6 +574,10 @@ function applyProgression(
           throw new Error(
             `Cannot apply progression: ${session.id}/${exercise.exercise} set ${set.index} has progression but no intensity.`
           );
+        }
+
+        if (set.intensity.type === "percent_of_set" || set.intensity.type === "load_delta_from_set") {
+          return;
         }
 
         stateByKey.set(makeSetKey(session.id, exerciseIndex, set.index), {
@@ -550,7 +635,14 @@ function applyProgression(
           }
 
           const condition = resolveCondition(state.rule);
-          const ok = evaluateCondition(condition, completion, exercise.exercise, set.index, set.intensity);
+          const ok = evaluateCondition(
+            condition,
+            completion,
+            exercise.exercise,
+            exercise.exercise_id,
+            set.index,
+            set.intensity
+          );
           if (ok) {
             state.success_units += 1;
           }
@@ -629,7 +721,14 @@ function applyProgression(
           }
 
           const condition = resolveCondition(state.rule);
-          const ok = evaluateCondition(condition, completion, exercise.exercise, set.index, set.intensity);
+          const ok = evaluateCondition(
+            condition,
+            completion,
+            exercise.exercise,
+            exercise.exercise_id,
+            set.index,
+            set.intensity
+          );
           if (ok) {
             state.success_units += 1;
           }
@@ -643,7 +742,11 @@ function applyProgression(
 
 function programUsesProgression(program: CompiledProgram): boolean {
   return program.sessions.some((session) =>
-    session.exercises.some((exercise) => exercise.sets.some((set) => set.progression !== undefined))
+    session.exercises.some((exercise) =>
+      exercise.sets.some(
+        (set) => set.progression?.type === "increment" || set.progression?.type === "weekly_increment"
+      )
+    )
   );
 }
 
@@ -743,12 +846,37 @@ export function materialize(program: CompiledProgram, options: MaterializeOption
     applyProgression(program, occurrences, completions);
   }
 
+  const slotOrder = (slot: MaterializedSession["slot"] | undefined): number => {
+    if (slot === undefined) {
+      return 0;
+    }
+    if (typeof slot === "number") {
+      return slot;
+    }
+    if (slot === "AM") {
+      return 10;
+    }
+    if (slot === "PM") {
+      return 20;
+    }
+    if (slot === "EVE") {
+      return 30;
+    }
+    return 100;
+  };
+
   occurrences.sort((a, b) => {
     const dateA = a.date_iso ?? "";
     const dateB = b.date_iso ?? "";
 
     if (dateA !== dateB) {
       return dateA.localeCompare(dateB);
+    }
+
+    const slotA = slotOrder(a.slot);
+    const slotB = slotOrder(b.slot);
+    if (slotA !== slotB) {
+      return slotA - slotB;
     }
 
     return a.id.localeCompare(b.id);

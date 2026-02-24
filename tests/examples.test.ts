@@ -36,4 +36,23 @@ export async function run(): Promise<void> {
     const expected = await readExpected("testdata/expected/powerlifting_peak.compiled.json");
     assert.deepStrictEqual(toJson(compiled), expected);
   }
+
+  {
+    const compiled = await compileFixture("examples/v0_2_language_growth.psl.yaml");
+
+    assert.equal(compiled.language_version, "0.2");
+    assert.equal(compiled.sessions.length, 3);
+    assert.equal(compiled.sessions[0]?.slot, "AM");
+    assert.equal(compiled.sessions[1]?.slot, "PM");
+
+    const strengthSets = compiled.sessions[0]?.exercises[0]?.sets ?? [];
+    assert.equal(strengthSets[0]?.role, "top");
+    assert.equal(strengthSets[1]?.intensity?.type, "percent_of_set");
+
+    const deloadSets = compiled.sessions[2]?.exercises[0]?.sets ?? [];
+    assert.equal(deloadSets.length, 3);
+    assert.equal(deloadSets[0]?.intensity?.type, "rpe");
+    assert.equal(deloadSets[0]?.intensity?.value, 7);
+    assert.equal(compiled.sessions[2]?.exercises[0]?.exercise, "squat_paused");
+  }
 }

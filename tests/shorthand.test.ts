@@ -121,5 +121,94 @@ export function run(): void {
     }
   });
 
+  assert.deepStrictEqual(parseShorthand("3x3 @-12%"), {
+    count: 3,
+    reps: 3,
+    intensity: {
+      type: "percent_of_set",
+      role: "top",
+      value: 88
+    }
+  });
+
+  assert.deepStrictEqual(parseShorthand("3x3 @-10kg from top"), {
+    count: 3,
+    reps: 3,
+    intensity: {
+      type: "load_delta_from_set",
+      role: "top",
+      value: -10,
+      unit: "kg"
+    }
+  });
+
+  assert.deepStrictEqual(parseShorthand("AMRAP 8m @RPE8 cap12"), {
+    count: 1,
+    work_type: "time",
+    time_mode: "amrap",
+    duration_seconds: 480,
+    role: "amrap",
+    intensity: {
+      type: "rpe",
+      value: 8
+    },
+    constraints: {
+      max_total_reps: 12
+    }
+  });
+
+  assert.deepStrictEqual(parseShorthand("EMOM 10m: 3 reps @70%"), {
+    count: 1,
+    work_type: "time",
+    time_mode: "emom",
+    duration_seconds: 600,
+    interval_seconds: 60,
+    reps: 3,
+    intensity: {
+      type: "percent_1rm",
+      value: 70
+    }
+  });
+
+  assert.deepStrictEqual(parseShorthand("density 8m target 30 reps"), {
+    count: 1,
+    work_type: "time",
+    time_mode: "density",
+    duration_seconds: 480,
+    target_total_reps: 30
+  });
+
+  assert.deepStrictEqual(parseShorthand("for time 8m target 30 reps @RPE8"), {
+    count: 1,
+    work_type: "time",
+    time_mode: "for_time",
+    duration_seconds: 480,
+    target_total_reps: 30,
+    intensity: {
+      type: "rpe",
+      value: 8
+    }
+  });
+
+  assert.deepStrictEqual(parseShorthand("1x5 @RPE8 cap@9 up to 5 sets until RPE9"), {
+    count: 1,
+    reps: 5,
+    intensity: {
+      type: "rpe",
+      value: 8
+    },
+    constraints: {
+      max_rpe: 9
+    },
+    repeat: {
+      max_sets: 5,
+      until: {
+        metric: "rpe",
+        op: ">=",
+        value: 9
+      }
+    }
+  });
+
   assert.throws(() => parseShorthand("abc"), ShorthandParseError);
 }

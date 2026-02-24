@@ -74,7 +74,10 @@ function getWeekdayFromIso(dateIso: string): Weekday {
   return getWeekdayUtc(parseIsoDate(dateIso));
 }
 
-function formatReps(reps: { min: number; max: number }): string {
+function formatReps(reps: { min: number; max: number } | undefined): string {
+  if (!reps) {
+    return "";
+  }
   return reps.min === reps.max ? String(reps.min) : `${reps.min}-${reps.max}`;
 }
 
@@ -104,7 +107,15 @@ function formatIntensity(intensity: MaterializedSession["exercises"][number]["se
     return `RPE${intensity.value}`;
   }
 
-  return `RIR${intensity.value}`;
+  if (intensity.type === "rir") {
+    return `RIR${intensity.value}`;
+  }
+
+  if (intensity.type === "percent_of_set") {
+    return `${intensity.value}%of(${intensity.role})`;
+  }
+
+  return `${intensity.value >= 0 ? "+" : ""}${intensity.value}${intensity.unit}from(${intensity.role})`;
 }
 
 function formatRestSeconds(restSeconds: number | undefined): string {
@@ -226,6 +237,7 @@ export function buildExportTables(program: CompiledProgram, sessions: Materializ
     "session_sequence",
     "session_id",
     "session_name",
+    "session_slot",
     "session_occurrence",
     "exercise",
     "rest_seconds",
@@ -301,13 +313,14 @@ export function buildExportTables(program: CompiledProgram, sessions: Materializ
           session.sequence,
           session.id,
           session.name,
+          session.slot ?? "",
           session.occurrence ?? "",
           exercise.exercise,
           exercise.rest_seconds ?? "",
           set.index,
           repsText,
-          set.reps.min,
-          set.reps.max,
+          set.reps?.min ?? "",
+          set.reps?.max ?? "",
           intensityText,
           intensityType,
           loadValue ?? "",
@@ -360,13 +373,22 @@ function intensityKey(
     return `rpe:${intensity.value}`;
   }
 
-  return `rir:${intensity.value}`;
+  if (intensity.type === "rir") {
+    return `rir:${intensity.value}`;
+  }
+
+  if (intensity.type === "percent_of_set") {
+    return `percent_of_set:${intensity.value}:${intensity.role}`;
+  }
+
+  return `load_delta_from_set:${intensity.value}:${intensity.unit}:${intensity.role}`;
 }
 
 type SetGroup = {
   count: number;
-  reps_min: number;
-  reps_max: number;
+  reps_min?: number;
+  reps_max?: number;
+  custom_prescription?: string;
   intensity?: MaterializedSession["exercises"][number]["sets"][number]["intensity"];
   note?: string;
 };
@@ -375,10 +397,19 @@ function groupSetsForClient(exercise: MaterializedSession["exercises"][number]):
   const groups: SetGroup[] = [];
 
   exercise.sets.forEach((set) => {
-    const key = `${set.reps.min}:${set.reps.max}:${intensityKey(set.intensity)}:${set.note ?? ""}`;
+    const customPrescription =
+      set.reps === undefined
+        ? `${set.time_mode ?? set.work_type ?? "set"}${set.duration_seconds !== undefined ? ` ${set.duration_seconds}s` : ""}${set.target_total_reps !== undefined ? ` target ${set.target_total_reps}` : ""}`
+        : undefined;
+    const repsKey = set.reps ? `${set.reps.min}:${set.reps.max}` : `custom:${customPrescription ?? ""}`;
+    const key = `${repsKey}:${intensityKey(set.intensity)}:${set.note ?? ""}`;
     const last = groups[groups.length - 1];
     if (last) {
-      const lastKey = `${last.reps_min}:${last.reps_max}:${intensityKey(last.intensity)}:${last.note ?? ""}`;
+      const lastRepsKey =
+        last.reps_min !== undefined && last.reps_max !== undefined
+          ? `${last.reps_min}:${last.reps_max}`
+          : `custom:${last.custom_prescription ?? ""}`;
+      const lastKey = `${lastRepsKey}:${intensityKey(last.intensity)}:${last.note ?? ""}`;
       if (lastKey === key) {
         last.count += 1;
         return;
@@ -387,8 +418,8 @@ function groupSetsForClient(exercise: MaterializedSession["exercises"][number]):
 
     groups.push({
       count: 1,
-      reps_min: set.reps.min,
-      reps_max: set.reps.max,
+      ...(set.reps ? { reps_min: set.reps.min, reps_max: set.reps.max } : {}),
+      ...(customPrescription ? { custom_prescription: customPrescription } : {}),
       intensity: set.intensity,
       note: set.note
     });
@@ -402,7 +433,10 @@ function formatRepRange(min: number, max: number): string {
 }
 
 function formatClientPrescription(group: SetGroup): string {
-  const repsText = formatRepRange(group.reps_min, group.reps_max);
+  const repsText =
+    group.reps_min !== undefined && group.reps_max !== undefined
+      ? formatRepRange(group.reps_min, group.reps_max)
+      : group.custom_prescription ?? "set";
   const intensityText = formatIntensity(group.intensity);
   const noteText = group.note ? ` - ${group.note}` : "";
   const at = intensityText ? ` @${intensityText}` : "";
@@ -793,7 +827,7 @@ export async function runExportCommand(args: string[]): Promise<number> {
             name: "Sets",
             rows: [tables.sets.columns, ...tables.sets.rows],
             freeze: { rows: 1 },
-            col_widths: [12, 8, 6, 6, 14, 20, 24, 10, 24, 10, 8, 8, 8, 8, 16, 14, 10, 10, 10, 10, 10, 12, 10, 8, 8, 40]
+            col_widths: [12, 8, 6, 6, 14, 20, 24, 10, 10, 24, 10, 8, 8, 8, 8, 16, 14, 10, 10, 10, 10, 10, 12, 10, 8, 8, 40]
           }
         ];
 

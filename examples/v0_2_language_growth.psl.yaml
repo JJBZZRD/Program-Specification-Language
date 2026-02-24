@@ -1,0 +1,101 @@
+language_version: "0.2"
+metadata:
+  id: v0-2-language-growth
+  name: v0.2 Language Growth Demo
+  description: Demonstrates v0.2 exercise identity, groups, time work, constraints, progression shape, deload, and slots.
+units: kg
+rounding:
+  round_to: 2.5
+  mode: nearest
+exercise_aliases:
+  "comp squat": squat_comp
+  "cgbp": bench_cg
+calendar:
+  start_date: "2026-03-02"
+  end_date: "2026-03-16"
+sessions:
+  - id: strength-am
+    name: Strength AM
+    schedule: "MON"
+    slot: AM
+    rest_default: 2m
+    exercises:
+      - exercise: Competition Squat
+        exercise_id: squat_comp
+        aliases: ["comp squat", "high bar squat"]
+        family: squat
+        tags: [barbell, competition]
+        warmup:
+          type: percent_ramp
+          from_percent: 40
+          to_percent: 85
+          steps: 4
+          reps: 3
+          based_on_role: top
+        substitutions:
+          - exercise_id: squat_paused
+            rank: 1
+            tags: [paused]
+          - exercise: Safety Bar Squat
+            rank: 2
+            constraints:
+              requires: [safety_bar]
+        sets:
+          - shorthand: "1x1 @RPE8 role top rest_after 5m"
+            tempo: "31X0"
+          - shorthand: "3x3 @-12% backoff cap@9"
+            progression:
+              type: auto_adjust
+              scope: exercise
+              criteria:
+                aggregation: all_sets
+                condition:
+                  type: session_success
+                  equals: true
+              actions:
+                - type: reduce_load
+                  by:
+                    value: 2.5
+                    unit: kg
+      - exercise: Deadlift
+        sets:
+          - "1x5 @RPE8 work cap@9 up to 5 sets until RPE9"
+      - exercise: Pull Up
+        sets:
+          - "EMOM 10m: 3 reps @RPE7"
+
+  - id: accessories-pm
+    name: Accessories PM
+    schedule: "MON"
+    slot: PM
+    rest_default: 75s
+    groups:
+      - id: A
+        type: superset
+        rounds: 4
+        rest_between_rounds: 2m
+    exercises:
+      - "A1 Incline DB Press: 1x10 @RIR2"
+      - "A2 Chest Supported Row: 1x12 @RIR2"
+      - exercise: Assault Bike
+        sets:
+          - "AMRAP 8m @RPE8 cap12"
+          - "density 8m target 30 reps"
+          - "for time 8m target 30 reps @RPE8"
+
+  - id: deload-day
+    name: Deload Day
+    day: 8
+    slot: AM
+    deload: true
+    exercise_swap_map:
+      squat_comp: squat_paused
+    exercises:
+      - exercise: Competition Squat
+        exercise_id: squat_comp
+        sets:
+          - count: 5
+            reps: 5
+            intensity:
+              type: rpe
+              value: 8

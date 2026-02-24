@@ -1,23 +1,37 @@
-﻿import type {
+import type {
+  DeloadModifiers,
   ExercisePrescription,
+  ExerciseSubstitution,
   IntensityTarget,
   LanguageVersion,
+  LoadUnit,
+  PrescriptionConstraints,
   ProgramAst,
   ProgramCalendar,
   ProgramMetadata,
-  ComparisonOp,
+  ProgressionAction,
+  ProgressionAggregation,
   ProgressionCondition,
+  ProgressionCriteria,
   ProgressionRule,
   RepTarget,
+  RepeatSpec,
+  RoundingPolicy,
   Session,
-  LoadUnit,
+  SessionGroup,
+  SessionModifiers,
   SessionSchedule,
+  SessionSlot,
   SetPrescription,
+  SetRole,
+  Tempo,
+  WarmupSpec,
   WeeklyIncrementBy,
   Weekday
 } from "../ast/types.js";
-import { CURRENT_LANGUAGE_VERSION } from "../ast/version.js";
+import { CURRENT_LANGUAGE_VERSION, SUPPORTED_LANGUAGE_VERSIONS } from "../ast/version.js";
 import { parseIntensityExpression, parseRepTargetExpression, parseShorthand } from "../parse/parseShorthand.js";
+import { parseDurationSecondsString } from "../util/duration.js";
 import type { Diagnostic, ValidationResult } from "./diagnostics.js";
 
 type UnknownRecord = Record<string, unknown>;
@@ -26,6 +40,26 @@ const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const WEEKDAYS: readonly Weekday[] = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"];
 const WEEKDAY_SET = new Set<string>(WEEKDAYS);
 const COMPARISON_OP_SET = new Set<string>([">=", ">", "<=", "<", "==", "!="]);
+const PROGRESSION_AGGREGATIONS: readonly ProgressionAggregation[] = [
+  "all_sets",
+  "any_set",
+  "last_set",
+  "total_reps",
+  "avg_rpe",
+  "min_load"
+];
+const RESERVED_SET_ROLES = new Set<string>([
+  "warmup",
+  "top",
+  "backoff",
+  "work",
+  "amrap",
+  "drop",
+  "cluster",
+  "giant",
+  "circuit",
+  "activation"
+]);
 
 const WEEKDAY_ALIASES = new Map<string, Weekday>([
   ["MON", "MON"],
@@ -49,6 +83,86 @@ const WEEKDAY_ALIASES = new Map<string, Weekday>([
 
 function isRecord(value: unknown): value is UnknownRecord {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function addError(diagnostics: Diagnostic[], path: string, message: string): void {
+  diagnostics.push({ path, message, severity: "error" });
+}
+
+function addWarning(diagnostics: Diagnostic[], path: string, message: string): void {
+  diagnostics.push({ path, message, severity: "warning" });
+}
+
+function hasNewErrors(diagnostics: Diagnostic[], startIndex: number): boolean {
+  for (let index = startIndex; index < diagnostics.length; index += 1) {
+    if (diagnostics[index]?.severity === "error") {
+      return true;
+    }
+  }
+  return false;
+}
+
+function normalizeAliasToken(raw: string): string {
+  return raw.trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+function toUtcDate(dateIso: string): Date {
+  return new Date(`${dateIso}T00:00:00Z`);
+}
+
+function formatIsoDateUtc(date: Date): string {
+  return date.toISOString().slice(0, 10);
+}
+
+function addDaysIsoDate(startDateIso: string, days: number): string {
+  const date = toUtcDate(startDateIso);
+  date.setUTCDate(date.getUTCDate() + days);
+  return formatIsoDateUtc(date);
+}
+
+function parseIsoDate(value: unknown, path: string, diagnostics: Diagnostic[]): string | undefined {
+  if (typeof value !== "string" || !ISO_DATE_PATTERN.test(value)) {
+    addError(diagnostics, path, "Date must be an ISO string YYYY-MM-DD.");
+    return undefined;
+  }
+
+  const date = toUtcDate(value);
+  if (Number.isNaN(date.getTime())) {
+    addError(diagnostics, path, "Invalid date.");
+    return undefined;
+  }
+
+  return value;
+}
+
+function parseDurationSeconds(value: unknown, path: string, diagnostics: Diagnostic[]): number | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (typeof value === "number") {
+    if (!Number.isInteger(value) || value < 0) {
+      addError(diagnostics, path, "Duration must be an integer >= 0 (seconds).");
+      return undefined;
+    }
+    return value;
+  }
+
+  if (typeof value === "string") {
+    const parsed = parseDurationSecondsString(value);
+    if (parsed === undefined) {
+      addError(
+        diagnostics,
+        path,
+        "Duration must be seconds (integer) or a string like 90s, 2m, 2m30s, or 2:30."
+      );
+      return undefined;
+    }
+    return parsed;
+  }
+
+  addError(diagnostics, path, "Duration must be an integer (seconds) or a duration string.");
+  return undefined;
 }
 
 function parseWeekdayToken(raw: string): Weekday | undefined {
@@ -87,212 +201,103 @@ function parseWeekdayList(raw: string): { days: Weekday[]; unknown: string[] } {
   return { days, unknown };
 }
 
-function addError(diagnostics: Diagnostic[], path: string, message: string): void {
-  diagnostics.push({ path, message, severity: "error" });
-}
-
-function hasNewErrors(diagnostics: Diagnostic[], startIndex: number): boolean {
-  for (let index = startIndex; index < diagnostics.length; index += 1) {
-    if (diagnostics[index]?.severity === "error") {
-      return true;
-    }
-  }
-  return false;
-}
-
-function toUtcDate(dateIso: string): Date {
-  return new Date(`${dateIso}T00:00:00Z`);
-}
-
-function parseIsoDate(value: unknown, path: string, diagnostics: Diagnostic[]): string | undefined {
-  if (typeof value !== "string" || !ISO_DATE_PATTERN.test(value)) {
-    addError(diagnostics, path, "Date must be an ISO string YYYY-MM-DD.");
-    return undefined;
-  }
-
-  const date = toUtcDate(value);
-  if (Number.isNaN(date.getTime())) {
-    addError(diagnostics, path, "Invalid date.");
-    return undefined;
-  }
-
-  return value;
-}
-
-function parseDurationSecondsString(raw: string): number | undefined {
-  const normalized = raw.trim().toLowerCase();
-  if (normalized === "") {
-    return undefined;
-  }
-
-  // mm:ss
-  const mmssMatch = normalized.match(/^(?<min>\d+)\s*:\s*(?<sec>\d{2})$/);
-  if (mmssMatch?.groups?.min !== undefined && mmssMatch.groups.sec !== undefined) {
-    const min = Number(mmssMatch.groups.min);
-    const sec = Number(mmssMatch.groups.sec);
-    if (!Number.isFinite(min) || !Number.isFinite(sec) || min < 0 || sec < 0 || sec >= 60) {
-      return undefined;
-    }
-    return min * 60 + sec;
-  }
-
-  // 2m30s / 2m 30s / 2m
-  const minutesSecondsMatch = normalized.match(
-    /^(?<min>\d+(?:\.\d+)?)\s*m(?:\s*(?<sec>\d+(?:\.\d+)?)\s*s)?$/
-  );
-  if (minutesSecondsMatch?.groups?.min !== undefined) {
-    const minutes = Number(minutesSecondsMatch.groups.min);
-    const seconds = minutesSecondsMatch.groups.sec ? Number(minutesSecondsMatch.groups.sec) : 0;
-
-    if (!Number.isFinite(minutes) || !Number.isFinite(seconds) || minutes < 0 || seconds < 0) {
-      return undefined;
-    }
-
-    const total = minutes * 60 + seconds;
-    if (!Number.isFinite(total)) {
-      return undefined;
-    }
-
-    const rounded = Math.round(total);
-    // Only accept values that are effectively whole seconds.
-    if (Math.abs(total - rounded) > 1e-9) {
-      return undefined;
-    }
-
-    return rounded;
-  }
-
-  const secondsMatch = normalized.match(/^(?<sec>\d+(?:\.\d+)?)\s*s(?:ec(?:onds?)?)?$/);
-  if (secondsMatch?.groups?.sec !== undefined) {
-    const seconds = Number(secondsMatch.groups.sec);
-    if (!Number.isFinite(seconds) || seconds < 0) {
-      return undefined;
-    }
-
-    const rounded = Math.round(seconds);
-    if (Math.abs(seconds - rounded) > 1e-9) {
-      return undefined;
-    }
-
-    return rounded;
-  }
-
-  const minutesMatch = normalized.match(/^(?<min>\d+(?:\.\d+)?)\s*m(?:in(?:utes?)?)?$/);
-  if (minutesMatch?.groups?.min !== undefined) {
-    const minutes = Number(minutesMatch.groups.min);
-    if (!Number.isFinite(minutes) || minutes < 0) {
-      return undefined;
-    }
-
-    const total = minutes * 60;
-    const rounded = Math.round(total);
-    if (Math.abs(total - rounded) > 1e-9) {
-      return undefined;
-    }
-
-    return rounded;
-  }
-
-  if (/^\d+$/.test(normalized)) {
-    const seconds = Number(normalized);
-    if (!Number.isFinite(seconds)) {
-      return undefined;
-    }
-    return seconds;
-  }
-
-  return undefined;
-}
-
-function parseDurationSeconds(value: unknown, path: string, diagnostics: Diagnostic[]): number | undefined {
+function parseStringArray(
+  value: unknown,
+  path: string,
+  diagnostics: Diagnostic[],
+  options: { minItems?: number } = {}
+): string[] | undefined {
   if (value === undefined) {
     return undefined;
   }
 
-  if (typeof value === "number") {
-    if (!Number.isInteger(value) || value < 0) {
-      addError(diagnostics, path, "Duration must be an integer >= 0 (seconds).");
-      return undefined;
-    }
-    return value;
+  if (!Array.isArray(value)) {
+    addError(diagnostics, path, "Expected an array of strings.");
+    return undefined;
   }
 
-  if (typeof value === "string") {
-    const seconds = parseDurationSecondsString(value);
-    if (seconds === undefined) {
-      addError(
-        diagnostics,
-        path,
-        "Duration must be seconds (integer) or a string like 90s, 2m, 2m30s, or 2:30."
-      );
-      return undefined;
+  const result: string[] = [];
+  value.forEach((item, index) => {
+    const itemPath = `${path}[${index}]`;
+    if (typeof item !== "string" || item.trim() === "") {
+      addError(diagnostics, itemPath, "Expected a non-empty string.");
+      return;
     }
+    result.push(item.trim());
+  });
 
-    return seconds;
+  if (options.minItems !== undefined && result.length < options.minItems) {
+    addError(diagnostics, path, `Expected at least ${options.minItems} item(s).`);
   }
 
-  addError(diagnostics, path, "Duration must be seconds (integer) or a duration string.");
-  return undefined;
+  return result;
 }
 
-function isRestDirectiveLine(raw: string): boolean {
-  const match = /^rest\b\s*[:=]?\s*(?<dur>.+)$/i.exec(raw.trim());
-  if (!match?.groups?.dur) {
-    return false;
+function parseLoadUnit(value: unknown, path: string, diagnostics: Diagnostic[]): LoadUnit | undefined {
+  if (typeof value !== "string") {
+    addError(diagnostics, path, "Unit must be kg or lb.");
+    return undefined;
   }
 
-  return /^\d/.test(match.groups.dur.trim());
+  const normalized = value.trim().toLowerCase();
+  if (normalized !== "kg" && normalized !== "lb") {
+    addError(diagnostics, path, "Unit must be kg or lb.");
+    return undefined;
+  }
+
+  return normalized as LoadUnit;
 }
 
-function parseRestDirectiveSeconds(
-  raw: string,
+function parseRoundingPolicy(
+  rounding: unknown,
   path: string,
   diagnostics: Diagnostic[]
-): number | undefined | null {
-  const match = /^rest\b\s*[:=]?\s*(?<dur>.+)$/i.exec(raw.trim());
-  if (!match?.groups?.dur) {
-    return null;
-  }
-
-  const dur = match.groups.dur.trim();
-  if (dur === "" || !/^\d/.test(dur)) {
-    return null;
-  }
-
-  return parseDurationSeconds(dur, path, diagnostics);
-}
-
-function parseCalendar(
-  calendar: unknown,
-  path: string,
-  diagnostics: Diagnostic[]
-): ProgramCalendar | undefined {
-  if (calendar === undefined) {
+): RoundingPolicy | undefined {
+  if (rounding === undefined) {
     return undefined;
   }
 
   const startIndex = diagnostics.length;
-
-  if (!isRecord(calendar)) {
-    addError(diagnostics, path, "Calendar must be an object.");
+  if (!isRecord(rounding)) {
+    addError(diagnostics, path, "rounding must be an object.");
     return undefined;
   }
 
-  const startDate = parseIsoDate(calendar.start_date, `${path}.start_date`, diagnostics);
-
-  const endDateRaw = calendar.end_date;
-  const endDate = endDateRaw === undefined ? undefined : parseIsoDate(endDateRaw, `${path}.end_date`, diagnostics);
-
-  const timezone = calendar.timezone;
-  if (timezone !== undefined) {
-    if (typeof timezone !== "string" || timezone.trim() === "") {
-      addError(diagnostics, `${path}.timezone`, "timezone must be a non-empty string.");
+  const roundToRaw = rounding.round_to;
+  if (roundToRaw !== undefined) {
+    if (typeof roundToRaw !== "number" || !Number.isFinite(roundToRaw) || roundToRaw <= 0) {
+      addError(diagnostics, `${path}.round_to`, "round_to must be a number > 0.");
     }
   }
 
-  if (startDate && endDate) {
-    if (toUtcDate(endDate).getTime() < toUtcDate(startDate).getTime()) {
-      addError(diagnostics, `${path}.end_date`, "end_date must be on or after start_date.");
+  const modeRaw = rounding.mode;
+  if (modeRaw !== undefined) {
+    if (modeRaw !== "nearest" && modeRaw !== "down" && modeRaw !== "up") {
+      addError(diagnostics, `${path}.mode`, "mode must be nearest, down, or up.");
+    }
+  }
+
+  const equipmentRaw = rounding.equipment;
+  let equipment: RoundingPolicy["equipment"] | undefined;
+  if (equipmentRaw !== undefined) {
+    if (!isRecord(equipmentRaw)) {
+      addError(diagnostics, `${path}.equipment`, "equipment must be an object.");
+    } else {
+      const parsed: NonNullable<RoundingPolicy["equipment"]> = {};
+      (["barbell", "dumbbell", "machine"] as const).forEach((key) => {
+        const current = equipmentRaw[key];
+        if (current === undefined) {
+          return;
+        }
+        if (typeof current !== "number" || !Number.isFinite(current) || current <= 0) {
+          addError(diagnostics, `${path}.equipment.${key}`, "Equipment increment must be a number > 0.");
+          return;
+        }
+        parsed[key] = current;
+      });
+      if (Object.keys(parsed).length > 0) {
+        equipment = parsed;
+      }
     }
   }
 
@@ -301,9 +306,967 @@ function parseCalendar(
   }
 
   return {
-    start_date: startDate as string,
-    end_date: endDate as string | undefined,
-    timezone: timezone as string | undefined
+    ...(roundToRaw !== undefined ? { round_to: roundToRaw as number } : {}),
+    ...(modeRaw !== undefined ? { mode: modeRaw as "nearest" | "down" | "up" } : {}),
+    ...(equipment ? { equipment } : {})
+  };
+}
+
+function parseConstraints(
+  constraints: unknown,
+  path: string,
+  diagnostics: Diagnostic[]
+): PrescriptionConstraints | undefined {
+  if (constraints === undefined) {
+    return undefined;
+  }
+
+  const startIndex = diagnostics.length;
+  if (!isRecord(constraints)) {
+    addError(diagnostics, path, "constraints must be an object.");
+    return undefined;
+  }
+
+  const parsed: PrescriptionConstraints = {};
+
+  if (constraints.max_rpe !== undefined) {
+    const value = constraints.max_rpe;
+    if (typeof value !== "number" || !Number.isFinite(value) || value < 1 || value > 10) {
+      addError(diagnostics, `${path}.max_rpe`, "max_rpe must be a number between 1 and 10.");
+    } else {
+      parsed.max_rpe = value;
+    }
+  }
+
+  if (constraints.min_rir !== undefined) {
+    const value = constraints.min_rir;
+    if (typeof value !== "number" || !Number.isFinite(value) || value < 0 || value > 6) {
+      addError(diagnostics, `${path}.min_rir`, "min_rir must be a number between 0 and 6.");
+    } else {
+      parsed.min_rir = value;
+    }
+  }
+
+  if (constraints.max_sets !== undefined) {
+    const value = constraints.max_sets;
+    if (typeof value !== "number" || !Number.isInteger(value) || value < 1) {
+      addError(diagnostics, `${path}.max_sets`, "max_sets must be an integer >= 1.");
+    } else {
+      parsed.max_sets = value;
+    }
+  }
+
+  if (constraints.max_total_reps !== undefined) {
+    const value = constraints.max_total_reps;
+    if (typeof value !== "number" || !Number.isInteger(value) || value < 1) {
+      addError(diagnostics, `${path}.max_total_reps`, "max_total_reps must be an integer >= 1.");
+    } else {
+      parsed.max_total_reps = value;
+    }
+  }
+
+  if (constraints.stop_on_failure !== undefined) {
+    if (typeof constraints.stop_on_failure !== "boolean") {
+      addError(diagnostics, `${path}.stop_on_failure`, "stop_on_failure must be a boolean.");
+    } else {
+      parsed.stop_on_failure = constraints.stop_on_failure;
+    }
+  }
+
+  if (constraints.velocity_loss_cap !== undefined) {
+    const value = constraints.velocity_loss_cap;
+    if (typeof value !== "number" || !Number.isFinite(value) || value < 0 || value > 100) {
+      addError(diagnostics, `${path}.velocity_loss_cap`, "velocity_loss_cap must be a number between 0 and 100.");
+    } else {
+      parsed.velocity_loss_cap = value;
+    }
+  }
+
+  if (hasNewErrors(diagnostics, startIndex)) {
+    return undefined;
+  }
+
+  return Object.keys(parsed).length > 0 ? parsed : undefined;
+}
+
+function parseRepeat(repeat: unknown, path: string, diagnostics: Diagnostic[]): RepeatSpec | undefined {
+  if (repeat === undefined) {
+    return undefined;
+  }
+
+  const startIndex = diagnostics.length;
+  if (!isRecord(repeat)) {
+    addError(diagnostics, path, "repeat must be an object.");
+    return undefined;
+  }
+
+  let maxSets: number | undefined;
+  if (repeat.max_sets !== undefined) {
+    const value = repeat.max_sets;
+    if (typeof value !== "number" || !Number.isInteger(value) || value < 1) {
+      addError(diagnostics, `${path}.max_sets`, "repeat.max_sets must be an integer >= 1.");
+    } else {
+      maxSets = value;
+    }
+  }
+
+  let until: RepeatSpec["until"] | undefined;
+  if (repeat.until !== undefined) {
+    const untilRaw = repeat.until;
+    if (!isRecord(untilRaw)) {
+      addError(diagnostics, `${path}.until`, "repeat.until must be an object.");
+    } else if (untilRaw.metric === "failure") {
+      if (untilRaw.op !== undefined && untilRaw.op !== "==" && untilRaw.op !== "!=") {
+        addError(diagnostics, `${path}.until.op`, "failure metric only supports == or !=.");
+      }
+      if (untilRaw.value !== undefined && typeof untilRaw.value !== "boolean") {
+        addError(diagnostics, `${path}.until.value`, "failure metric requires boolean value.");
+      }
+      until = {
+        metric: "failure",
+        op: (untilRaw.op as "==" | "!=" | undefined) ?? "==",
+        value: (untilRaw.value as boolean | undefined) ?? true
+      };
+    } else {
+      const metric = untilRaw.metric;
+      if (metric !== "rpe" && metric !== "rir" && metric !== "velocity_loss") {
+        addError(
+          diagnostics,
+          `${path}.until.metric`,
+          "repeat.until.metric must be rpe, rir, velocity_loss, or failure."
+        );
+      }
+      if (typeof untilRaw.op !== "string" || !COMPARISON_OP_SET.has(untilRaw.op)) {
+        addError(diagnostics, `${path}.until.op`, "repeat.until.op must be a comparison operator.");
+      }
+      if (typeof untilRaw.value !== "number" || !Number.isFinite(untilRaw.value)) {
+        addError(diagnostics, `${path}.until.value`, "repeat.until.value must be a finite number.");
+      }
+
+      if (
+        (metric === "rpe" || metric === "rir" || metric === "velocity_loss") &&
+        typeof untilRaw.op === "string" &&
+        COMPARISON_OP_SET.has(untilRaw.op) &&
+        typeof untilRaw.value === "number" &&
+        Number.isFinite(untilRaw.value)
+      ) {
+        until = {
+          metric,
+          op: untilRaw.op as ">" | "<" | ">=" | "<=" | "==" | "!=",
+          value: untilRaw.value
+        };
+      }
+    }
+  }
+
+  if (hasNewErrors(diagnostics, startIndex)) {
+    return undefined;
+  }
+
+  if (maxSets === undefined && until === undefined) {
+    addError(diagnostics, path, "repeat requires at least one of max_sets or until.");
+    return undefined;
+  }
+
+  return {
+    ...(maxSets !== undefined ? { max_sets: maxSets } : {}),
+    ...(until ? { until } : {})
+  };
+}
+
+function parseTempo(tempo: unknown, path: string, diagnostics: Diagnostic[]): Tempo | undefined {
+  if (tempo === undefined) {
+    return undefined;
+  }
+
+  if (typeof tempo === "string") {
+    if (tempo.trim() === "") {
+      addError(diagnostics, path, "tempo string cannot be empty.");
+      return undefined;
+    }
+    return tempo.trim();
+  }
+
+  if (!isRecord(tempo)) {
+    addError(diagnostics, path, "tempo must be a string or object.");
+    return undefined;
+  }
+
+  const result: NonNullable<Exclude<Tempo, string>> = {};
+  (["eccentric", "pause_bottom", "concentric", "pause_top"] as const).forEach((key) => {
+    const raw = tempo[key];
+    if (raw === undefined) {
+      return;
+    }
+    if (typeof raw !== "string" && typeof raw !== "number") {
+      addError(diagnostics, `${path}.${key}`, `${key} must be a string or number.`);
+      return;
+    }
+    result[key] = String(raw);
+  });
+
+  if (Object.keys(result).length === 0) {
+    addError(diagnostics, path, "tempo object must include at least one field.");
+    return undefined;
+  }
+
+  return result;
+}
+
+function parseRole(role: unknown, path: string, diagnostics: Diagnostic[]): SetRole | undefined {
+  if (role === undefined) {
+    return undefined;
+  }
+
+  if (typeof role !== "string" || role.trim() === "") {
+    addError(diagnostics, path, "role must be a non-empty string.");
+    return undefined;
+  }
+
+  return role.trim().toLowerCase() as SetRole;
+}
+
+function parseIntensity(
+  intensity: unknown,
+  path: string,
+  diagnostics: Diagnostic[]
+): IntensityTarget | undefined {
+  if (intensity === undefined) {
+    return undefined;
+  }
+
+  if (typeof intensity === "string") {
+    try {
+      return parseIntensity(parseIntensityExpression(intensity), path, diagnostics);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Invalid intensity shorthand.";
+      addError(diagnostics, path, message);
+      return undefined;
+    }
+  }
+
+  if (!isRecord(intensity)) {
+    addError(diagnostics, path, "Intensity must be an object.");
+    return undefined;
+  }
+
+  const type = intensity.type;
+  if (
+    type !== "percent_1rm" &&
+    type !== "rpe" &&
+    type !== "rir" &&
+    type !== "load" &&
+    type !== "load_range" &&
+    type !== "percent_of_set" &&
+    type !== "load_delta_from_set"
+  ) {
+    addError(
+      diagnostics,
+      `${path}.type`,
+      "Intensity type must be percent_1rm, rpe, rir, load, load_range, percent_of_set, or load_delta_from_set."
+    );
+    return undefined;
+  }
+
+  if (type === "percent_of_set") {
+    const value = intensity.value;
+    const role = parseRole(intensity.role, `${path}.role`, diagnostics);
+    if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) {
+      addError(diagnostics, `${path}.value`, "percent_of_set value must be a number > 0.");
+      return undefined;
+    }
+    if (!role) {
+      return undefined;
+    }
+    return { type: "percent_of_set", role, value };
+  }
+
+  if (type === "load_delta_from_set") {
+    const value = intensity.value;
+    const role = parseRole(intensity.role, `${path}.role`, diagnostics);
+    const unit = parseLoadUnit(intensity.unit, `${path}.unit`, diagnostics);
+    if (typeof value !== "number" || !Number.isFinite(value)) {
+      addError(diagnostics, `${path}.value`, "load_delta_from_set value must be a finite number.");
+      return undefined;
+    }
+    if (!role || !unit) {
+      return undefined;
+    }
+    return { type: "load_delta_from_set", role, value, unit };
+  }
+
+  const plusLoadRaw = intensity.plus_load;
+
+  if (type === "load_range") {
+    if (plusLoadRaw !== undefined) {
+      addError(diagnostics, `${path}.plus_load`, "plus_load is only supported for percent_1rm.");
+      return undefined;
+    }
+    const minRaw = intensity.min;
+    const maxRaw = intensity.max;
+    const unit = parseLoadUnit(intensity.unit, `${path}.unit`, diagnostics);
+    if (typeof minRaw !== "number" || !Number.isFinite(minRaw) || !(minRaw > 0)) {
+      addError(diagnostics, `${path}.min`, "load_range.min must be a number > 0.");
+      return undefined;
+    }
+    if (typeof maxRaw !== "number" || !Number.isFinite(maxRaw) || maxRaw < minRaw) {
+      addError(diagnostics, `${path}.max`, "load_range.max must be >= min.");
+      return undefined;
+    }
+    if (!unit) {
+      return undefined;
+    }
+    return { type: "load_range", min: minRaw, max: maxRaw, unit };
+  }
+
+  const value = intensity.value;
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    addError(diagnostics, `${path}.value`, "Intensity value must be a finite number.");
+    return undefined;
+  }
+
+  if (type === "percent_1rm") {
+    if (!(value > 0 && value <= 150)) {
+      addError(diagnostics, `${path}.value`, "percent_1rm value must be > 0 and <= 150.");
+      return undefined;
+    }
+
+    let plus_load: { value: number; unit: LoadUnit } | undefined;
+    if (plusLoadRaw !== undefined) {
+      if (!isRecord(plusLoadRaw)) {
+        addError(diagnostics, `${path}.plus_load`, "plus_load must be an object {value,unit}.");
+        return undefined;
+      }
+
+      if (typeof plusLoadRaw.value !== "number" || !Number.isFinite(plusLoadRaw.value)) {
+        addError(diagnostics, `${path}.plus_load.value`, "plus_load.value must be a finite number.");
+        return undefined;
+      }
+
+      const unit = parseLoadUnit(plusLoadRaw.unit, `${path}.plus_load.unit`, diagnostics);
+      if (!unit) {
+        return undefined;
+      }
+      plus_load = { value: plusLoadRaw.value, unit };
+    }
+
+    return { type: "percent_1rm", value, ...(plus_load ? { plus_load } : {}) };
+  }
+
+  if (plusLoadRaw !== undefined) {
+    addError(diagnostics, `${path}.plus_load`, "plus_load is only supported for percent_1rm.");
+    return undefined;
+  }
+
+  if (type === "rpe") {
+    if (!(value >= 1 && value <= 10)) {
+      addError(diagnostics, `${path}.value`, "rpe value must be between 1 and 10.");
+      return undefined;
+    }
+    return { type: "rpe", value };
+  }
+
+  if (type === "rir") {
+    if (!(value >= 0 && value <= 6)) {
+      addError(diagnostics, `${path}.value`, "rir value must be between 0 and 6.");
+      return undefined;
+    }
+    return { type: "rir", value };
+  }
+
+  const unit = parseLoadUnit(intensity.unit, `${path}.unit`, diagnostics);
+  if (!unit) {
+    return undefined;
+  }
+  if (!(value > 0)) {
+    addError(diagnostics, `${path}.value`, "load value must be > 0.");
+    return undefined;
+  }
+
+  return { type: "load", value, unit };
+}
+
+function parseProgressionCondition(
+  condition: unknown,
+  intensity: IntensityTarget | undefined,
+  path: string,
+  diagnostics: Diagnostic[]
+): ProgressionCondition | undefined {
+  if (condition === undefined) {
+    return undefined;
+  }
+
+  if (!isRecord(condition)) {
+    addError(diagnostics, path, "progression condition must be an object.");
+    return undefined;
+  }
+
+  const type = condition.type;
+  if (type !== "session_success" && type !== "metric_vs_target" && type !== "aggregate_metric") {
+    addError(
+      diagnostics,
+      `${path}.type`,
+      "progression condition type must be session_success, metric_vs_target, or aggregate_metric."
+    );
+    return undefined;
+  }
+
+  if (type === "session_success") {
+    if (condition.equals !== undefined && typeof condition.equals !== "boolean") {
+      addError(diagnostics, `${path}.equals`, "session_success.equals must be a boolean.");
+      return undefined;
+    }
+    return { type: "session_success", equals: condition.equals as boolean | undefined };
+  }
+
+  if (type === "aggregate_metric") {
+    const metricRaw = condition.metric;
+    if (metricRaw !== "total_reps" && metricRaw !== "avg_rpe" && metricRaw !== "min_load") {
+      addError(diagnostics, `${path}.metric`, "aggregate_metric.metric must be total_reps, avg_rpe, or min_load.");
+      return undefined;
+    }
+    if (typeof condition.op !== "string" || !COMPARISON_OP_SET.has(condition.op)) {
+      addError(diagnostics, `${path}.op`, "aggregate_metric.op must be a comparison operator.");
+      return undefined;
+    }
+    if (typeof condition.value !== "number" || !Number.isFinite(condition.value)) {
+      addError(diagnostics, `${path}.value`, "aggregate_metric.value must be a finite number.");
+      return undefined;
+    }
+
+    let unit: LoadUnit | undefined;
+    if (metricRaw === "min_load" && condition.unit !== undefined) {
+      unit = parseLoadUnit(condition.unit, `${path}.unit`, diagnostics);
+    }
+
+    return {
+      type: "aggregate_metric",
+      metric: metricRaw,
+      op: condition.op as ">" | "<" | ">=" | "<=" | "==" | "!=",
+      value: condition.value,
+      ...(unit ? { unit } : {})
+    };
+  }
+
+  if (!intensity) {
+    addError(diagnostics, path, "metric_vs_target requires a set intensity.");
+    return undefined;
+  }
+
+  if (intensity.type === "percent_1rm" || intensity.type === "percent_of_set" || intensity.type === "load_delta_from_set") {
+    addError(
+      diagnostics,
+      path,
+      "metric_vs_target currently supports load/load_range/rpe/rir intensities only."
+    );
+    return undefined;
+  }
+
+  const metricRaw = condition.metric;
+  if (metricRaw !== "load" && metricRaw !== "rpe" && metricRaw !== "rir") {
+    addError(diagnostics, `${path}.metric`, "metric must be load, rpe, or rir.");
+    return undefined;
+  }
+  if (typeof condition.op !== "string" || !COMPARISON_OP_SET.has(condition.op)) {
+    addError(diagnostics, `${path}.op`, "op must be one of: >=, >, <=, <, ==, !=.");
+    return undefined;
+  }
+
+  const target = (condition.target ?? (intensity.type === "load_range" ? "max" : "value")) as
+    | "value"
+    | "min"
+    | "max";
+  if (target !== "value" && target !== "min" && target !== "max") {
+    addError(diagnostics, `${path}.target`, "target must be value, min, or max.");
+    return undefined;
+  }
+
+  if (intensity.type === "load_range") {
+    if (metricRaw !== "load") {
+      addError(diagnostics, `${path}.metric`, "load_range conditions must use load metric.");
+      return undefined;
+    }
+    if (target === "value") {
+      addError(diagnostics, `${path}.target`, "load_range conditions require target min or max.");
+      return undefined;
+    }
+  } else if (intensity.type === "load") {
+    if (metricRaw !== "load") {
+      addError(diagnostics, `${path}.metric`, "load conditions must use load metric.");
+      return undefined;
+    }
+    if (target !== "value") {
+      addError(diagnostics, `${path}.target`, "load conditions only support target value.");
+      return undefined;
+    }
+  } else if (intensity.type === "rpe") {
+    if (metricRaw !== "rpe") {
+      addError(diagnostics, `${path}.metric`, "rpe conditions must use rpe metric.");
+      return undefined;
+    }
+    if (target !== "value") {
+      addError(diagnostics, `${path}.target`, "rpe conditions only support target value.");
+      return undefined;
+    }
+  } else if (intensity.type === "rir") {
+    if (metricRaw !== "rir") {
+      addError(diagnostics, `${path}.metric`, "rir conditions must use rir metric.");
+      return undefined;
+    }
+    if (target !== "value") {
+      addError(diagnostics, `${path}.target`, "rir conditions only support target value.");
+      return undefined;
+    }
+  }
+
+  return {
+    type: "metric_vs_target",
+    metric: metricRaw,
+    op: condition.op as ">" | "<" | ">=" | "<=" | "==" | "!=",
+    target
+  };
+}
+
+function parseProgressionCadence(
+  cadence: unknown,
+  path: string,
+  diagnostics: Diagnostic[]
+): { type: "weeks"; every?: number } | { type: "sessions"; every?: number; on_weekdays?: Weekday[] } | undefined {
+  if (cadence === undefined) {
+    return undefined;
+  }
+
+  const startIndex = diagnostics.length;
+  if (!isRecord(cadence)) {
+    addError(diagnostics, path, "progression.cadence must be an object.");
+    return undefined;
+  }
+
+  if (cadence.type !== "weeks" && cadence.type !== "sessions") {
+    addError(diagnostics, `${path}.type`, "progression.cadence.type must be weeks or sessions.");
+    return undefined;
+  }
+
+  if (cadence.every !== undefined) {
+    if (typeof cadence.every !== "number" || !Number.isInteger(cadence.every) || cadence.every < 1) {
+      addError(diagnostics, `${path}.every`, "progression.cadence.every must be an integer >= 1.");
+    }
+  }
+
+  if (cadence.type === "weeks") {
+    if (cadence.on_weekdays !== undefined) {
+      addError(diagnostics, `${path}.on_weekdays`, "on_weekdays is only valid for sessions cadence.");
+    }
+    if (hasNewErrors(diagnostics, startIndex)) {
+      return undefined;
+    }
+    return { type: "weeks", ...(cadence.every !== undefined ? { every: cadence.every as number } : {}) };
+  }
+
+  let on_weekdays: Weekday[] | undefined;
+  if (cadence.on_weekdays !== undefined) {
+    if (!Array.isArray(cadence.on_weekdays) || cadence.on_weekdays.length === 0) {
+      addError(diagnostics, `${path}.on_weekdays`, "on_weekdays must be a non-empty array.");
+    } else {
+      const parsed: Weekday[] = [];
+      cadence.on_weekdays.forEach((day, index) => {
+        if (typeof day !== "string" || !WEEKDAY_SET.has(day)) {
+          addError(diagnostics, `${path}.on_weekdays[${index}]`, `Invalid weekday. Expected one of: ${WEEKDAYS.join(", ")}.`);
+          return;
+        }
+        parsed.push(day as Weekday);
+      });
+      if (parsed.length > 0) {
+        on_weekdays = parsed;
+      }
+    }
+  }
+
+  if (hasNewErrors(diagnostics, startIndex)) {
+    return undefined;
+  }
+
+  return {
+    type: "sessions",
+    ...(cadence.every !== undefined ? { every: cadence.every as number } : {}),
+    ...(on_weekdays ? { on_weekdays } : {})
+  };
+}
+
+function parseProgressionShorthand(
+  progression: string,
+  intensity: IntensityTarget,
+  path: string,
+  diagnostics: Diagnostic[]
+): UnknownRecord | undefined {
+  const normalized = progression.trim().replace(/\s+/g, " ");
+  if (normalized === "") {
+    addError(diagnostics, path, "progression shorthand cannot be empty.");
+    return undefined;
+  }
+
+  const ifMatch = /\bif\b/i.exec(normalized);
+  const main = ifMatch ? normalized.slice(0, ifMatch.index).trim() : normalized;
+  const conditionRaw = ifMatch ? normalized.slice(ifMatch.index + ifMatch[0].length).trim() : undefined;
+  if (main === "") {
+    addError(diagnostics, path, "progression shorthand must start with an increment.");
+    return undefined;
+  }
+
+  const byMatch =
+    /^\s*(?<sign>[+-])?\s*(?<value>\d+(?:\.\d+)?)\s*(?<unit>%\s*(?:1\s*rm)?|rpe|rir|kg|kgs|lb|lbs)?/i.exec(main);
+  if (!byMatch?.groups?.value) {
+    addError(diagnostics, path, "progression shorthand must start with an increment.");
+    return undefined;
+  }
+
+  const sign = byMatch.groups.sign === "-" ? -1 : 1;
+  const value = Number(byMatch.groups.value) * sign;
+  if (!Number.isFinite(value)) {
+    addError(diagnostics, path, "Invalid progression increment.");
+    return undefined;
+  }
+
+  let by: WeeklyIncrementBy = value;
+  if (byMatch.groups.unit) {
+    const unitToken = byMatch.groups.unit.replace(/\s+/g, "").toLowerCase();
+    if (unitToken === "kg" || unitToken === "kgs" || unitToken === "lb" || unitToken === "lbs") {
+      const unit = unitToken.startsWith("kg") ? "kg" : "lb";
+      if (intensity.type === "load" || intensity.type === "load_range") {
+        if (intensity.unit !== unit) {
+          addError(diagnostics, path, `Progression unit ${unit} does not match intensity unit ${intensity.unit}.`);
+          return undefined;
+        }
+      } else if (intensity.type === "percent_1rm") {
+        by = { type: "load", value, unit };
+      } else {
+        addError(diagnostics, path, "Load units are only valid for load/load_range or percent_1rm intensities.");
+        return undefined;
+      }
+    }
+  }
+
+  let remainder = main.slice(byMatch[0].length).trim();
+  let onWeekdays: Weekday[] | undefined;
+
+  const onMatch = /\b(?:on|only)\s+(?<days>[A-Za-z,\s/]+)$/i.exec(remainder);
+  if (onMatch?.groups?.days !== undefined) {
+    const parsedDays = parseWeekdayList(onMatch.groups.days);
+    if (parsedDays.unknown.length > 0) {
+      addError(diagnostics, path, `Invalid weekday(s): ${parsedDays.unknown.join(", ")}.`);
+      return undefined;
+    }
+    onWeekdays = parsedDays.days.length > 0 ? parsedDays.days : undefined;
+    remainder = remainder.slice(0, onMatch.index).trim();
+  }
+
+  let cadence: { type: "weeks"; every?: number } | { type: "sessions"; every?: number; on_weekdays?: Weekday[] } = {
+    type: "weeks",
+    every: 1
+  };
+  if (remainder !== "") {
+    const cadenceMatch =
+      /^(?:every\s+)?(?<every>\d+)?\s*(?<unit>week|weeks|w|session|sessions|s)$/i.exec(remainder);
+    if (cadenceMatch?.groups?.unit) {
+      cadence =
+        cadenceMatch.groups.unit.toLowerCase().startsWith("w")
+          ? { type: "weeks", every: cadenceMatch.groups.every ? Number(cadenceMatch.groups.every) : 1 }
+          : { type: "sessions", every: cadenceMatch.groups.every ? Number(cadenceMatch.groups.every) : 1 };
+    } else if (/^weekly$/i.test(remainder)) {
+      cadence = { type: "weeks", every: 1 };
+    } else {
+      addError(diagnostics, path, "Invalid cadence shorthand.");
+      return undefined;
+    }
+  }
+
+  if (onWeekdays) {
+    if (cadence.type === "weeks") {
+      cadence = { type: "sessions", every: cadence.every ?? 1, on_weekdays: onWeekdays };
+    } else {
+      cadence = { ...cadence, on_weekdays: onWeekdays };
+    }
+  }
+
+  let when: UnknownRecord | undefined;
+  if (conditionRaw) {
+    if (/^(success|succeeded|pass|passed)$/i.test(conditionRaw)) {
+      when = { type: "session_success", equals: true };
+    } else if (/^(fail|failed|failure)$/i.test(conditionRaw)) {
+      when = { type: "session_success", equals: false };
+    } else {
+      const metricMatch =
+        /^(?<metric>load|rpe|rir)\s*(?<op>>=|>|<=|<|==|!=)\s*(?<target>target|value|min|max)?$/i.exec(conditionRaw);
+      if (!metricMatch?.groups?.metric || !metricMatch.groups.op) {
+        addError(diagnostics, path, "Invalid progression condition.");
+        return undefined;
+      }
+      const targetToken = metricMatch.groups.target?.toLowerCase();
+      const normalizedTarget =
+        targetToken === "target"
+          ? "value"
+          : targetToken === "value" || targetToken === "min" || targetToken === "max"
+            ? targetToken
+            : undefined;
+      when = {
+        type: "metric_vs_target",
+        metric: metricMatch.groups.metric.toLowerCase(),
+        op: metricMatch.groups.op,
+        ...(normalizedTarget ? { target: normalizedTarget } : {})
+      };
+    }
+  }
+
+  return {
+    type: "increment",
+    by,
+    cadence,
+    ...(when ? { when } : {})
+  };
+}
+
+function parseProgressionAggregation(
+  aggregation: unknown,
+  path: string,
+  diagnostics: Diagnostic[]
+): ProgressionAggregation | undefined {
+  if (aggregation === undefined) {
+    return undefined;
+  }
+  if (typeof aggregation !== "string" || !PROGRESSION_AGGREGATIONS.includes(aggregation as ProgressionAggregation)) {
+    addError(
+      diagnostics,
+      path,
+      `aggregation must be one of: ${PROGRESSION_AGGREGATIONS.join(", ")}.`
+    );
+    return undefined;
+  }
+  return aggregation as ProgressionAggregation;
+}
+
+function parseProgressionCriteria(
+  criteria: unknown,
+  intensity: IntensityTarget | undefined,
+  path: string,
+  diagnostics: Diagnostic[]
+): ProgressionCriteria | undefined {
+  if (criteria === undefined) {
+    return undefined;
+  }
+
+  if (!isRecord(criteria)) {
+    addError(diagnostics, path, "progression.criteria must be an object.");
+    return undefined;
+  }
+
+  const aggregation = parseProgressionAggregation(criteria.aggregation, `${path}.aggregation`, diagnostics);
+  const condition = parseProgressionCondition(criteria.condition, intensity, `${path}.condition`, diagnostics);
+
+  if (!aggregation && !condition) {
+    addError(diagnostics, path, "progression.criteria must include aggregation and/or condition.");
+    return undefined;
+  }
+
+  return {
+    ...(aggregation ? { aggregation } : {}),
+    ...(condition ? { condition } : {})
+  };
+}
+
+function parseProgressionAction(
+  action: unknown,
+  path: string,
+  diagnostics: Diagnostic[]
+): ProgressionAction | undefined {
+  if (!isRecord(action)) {
+    addError(diagnostics, path, "action must be an object.");
+    return undefined;
+  }
+
+  const type = action.type;
+  if (type !== "repeat_week" && type !== "reduce_load" && type !== "reduce_volume" && type !== "switch_variant") {
+    addError(diagnostics, `${path}.type`, "action.type must be repeat_week, reduce_load, reduce_volume, or switch_variant.");
+    return undefined;
+  }
+
+  if (type === "repeat_week") {
+    return { type: "repeat_week" };
+  }
+
+  if (type === "reduce_load") {
+    if (typeof action.by === "number") {
+      if (!Number.isFinite(action.by)) {
+        addError(diagnostics, `${path}.by`, "reduce_load.by must be finite.");
+        return undefined;
+      }
+      return { type: "reduce_load", by: action.by };
+    }
+    if (isRecord(action.by) && action.by.value !== undefined && action.by.unit !== undefined) {
+      const unit = parseLoadUnit(action.by.unit, `${path}.by.unit`, diagnostics);
+      if (typeof action.by.value !== "number" || !Number.isFinite(action.by.value) || !unit) {
+        addError(diagnostics, `${path}.by`, "reduce_load.by load delta must include finite value and unit.");
+        return undefined;
+      }
+      return { type: "reduce_load", by: { value: action.by.value, unit } };
+    }
+    addError(diagnostics, `${path}.by`, "reduce_load.by must be a number or {value,unit}.");
+    return undefined;
+  }
+
+  if (type === "reduce_volume") {
+    if (typeof action.by !== "number" || !Number.isFinite(action.by) || action.by <= 0) {
+      addError(diagnostics, `${path}.by`, "reduce_volume.by must be a number > 0.");
+      return undefined;
+    }
+    return { type: "reduce_volume", by: action.by };
+  }
+
+  if (typeof action.to_exercise_id !== "string" || action.to_exercise_id.trim() === "") {
+    addError(diagnostics, `${path}.to_exercise_id`, "switch_variant.to_exercise_id is required.");
+    return undefined;
+  }
+  return { type: "switch_variant", to_exercise_id: action.to_exercise_id.trim() };
+}
+
+function parseProgression(
+  progression: unknown,
+  intensity: IntensityTarget | undefined,
+  path: string,
+  diagnostics: Diagnostic[]
+): ProgressionRule | undefined {
+  if (progression === undefined) {
+    return undefined;
+  }
+
+  const startIndex = diagnostics.length;
+  let progressionValue: unknown = progression;
+
+  if (typeof progression === "string") {
+    if (!intensity) {
+      addError(diagnostics, path, "progression shorthand requires intensity.");
+      return undefined;
+    }
+    progressionValue = parseProgressionShorthand(progression, intensity, path, diagnostics);
+    if (!progressionValue) {
+      return undefined;
+    }
+  }
+
+  if (!isRecord(progressionValue)) {
+    addError(diagnostics, path, "progression must be an object or shorthand string.");
+    return undefined;
+  }
+
+  if (progressionValue.type === "auto_adjust") {
+    const scope = progressionValue.scope;
+    if (scope !== undefined && scope !== "set" && scope !== "exercise" && scope !== "session") {
+      addError(diagnostics, `${path}.scope`, "scope must be set, exercise, or session.");
+    }
+    const criteria = parseProgressionCriteria(progressionValue.criteria, intensity, `${path}.criteria`, diagnostics);
+
+    let actions: ProgressionAction[] | undefined;
+    if (!Array.isArray(progressionValue.actions) || progressionValue.actions.length === 0) {
+      addError(diagnostics, `${path}.actions`, "auto_adjust.actions must be a non-empty array.");
+    } else {
+      const parsed: ProgressionAction[] = [];
+      progressionValue.actions.forEach((entry, index) => {
+        const action = parseProgressionAction(entry, `${path}.actions[${index}]`, diagnostics);
+        if (action) {
+          parsed.push(action);
+        }
+      });
+      actions = parsed;
+    }
+
+    if (hasNewErrors(diagnostics, startIndex) || !criteria || !actions || actions.length === 0) {
+      return undefined;
+    }
+
+    return {
+      type: "auto_adjust",
+      ...(scope ? { scope: scope as "set" | "exercise" | "session" } : {}),
+      criteria,
+      actions
+    };
+  }
+
+  if (progressionValue.type !== "weekly_increment" && progressionValue.type !== "increment") {
+    addError(diagnostics, `${path}.type`, "progression.type must be weekly_increment, increment, or auto_adjust.");
+    return undefined;
+  }
+
+  if (!intensity) {
+    addError(diagnostics, path, "increment progression requires intensity.");
+    return undefined;
+  }
+
+  const when = parseProgressionCondition(progressionValue.when, intensity, `${path}.when`, diagnostics);
+  const criteria = parseProgressionCriteria(
+    progressionValue.criteria,
+    intensity,
+    `${path}.criteria`,
+    diagnostics
+  );
+  if (when && criteria?.condition) {
+    addError(diagnostics, `${path}.criteria.condition`, "Specify progression.when or progression.criteria.condition, not both.");
+  }
+
+  const cadence = parseProgressionCadence(progressionValue.cadence, `${path}.cadence`, diagnostics);
+  if (progressionValue.type === "increment" && cadence === undefined) {
+    addError(diagnostics, `${path}.cadence`, "increment progression requires cadence.");
+  }
+
+  const scope = progressionValue.scope;
+  if (scope !== undefined && scope !== "set" && scope !== "exercise" && scope !== "session") {
+    addError(diagnostics, `${path}.scope`, "scope must be set, exercise, or session.");
+  }
+
+  if (progressionValue.by === undefined) {
+    addError(diagnostics, `${path}.by`, "increment progression requires by.");
+    return undefined;
+  }
+
+  let by: WeeklyIncrementBy | undefined;
+  if (isRecord(progressionValue.by) && progressionValue.by.type === "load") {
+    const unit = parseLoadUnit(progressionValue.by.unit, `${path}.by.unit`, diagnostics);
+    if (typeof progressionValue.by.value !== "number" || !Number.isFinite(progressionValue.by.value) || !unit) {
+      addError(diagnostics, `${path}.by.value`, "by.value must be a finite number.");
+    } else {
+      by = { type: "load", value: progressionValue.by.value, unit };
+    }
+  } else if (intensity.type === "load_range" && isRecord(progressionValue.by)) {
+    const min = progressionValue.by.min;
+    const max = progressionValue.by.max;
+    if (min === undefined && max === undefined) {
+      addError(diagnostics, `${path}.by`, "by must include min and/or max.");
+    } else if (
+      (min !== undefined && (typeof min !== "number" || !Number.isFinite(min))) ||
+      (max !== undefined && (typeof max !== "number" || !Number.isFinite(max)))
+    ) {
+      addError(diagnostics, `${path}.by`, "by.min/by.max must be finite numbers.");
+    } else {
+      by = {
+        ...(min !== undefined ? { min: min as number } : {}),
+        ...(max !== undefined ? { max: max as number } : {})
+      };
+    }
+  } else if (typeof progressionValue.by === "number" && Number.isFinite(progressionValue.by)) {
+    by = progressionValue.by;
+  } else {
+    addError(diagnostics, `${path}.by`, "by must be a finite number, load delta object, or {min,max}.");
+  }
+
+  if (hasNewErrors(diagnostics, startIndex) || by === undefined) {
+    return undefined;
+  }
+
+  return {
+    type: progressionValue.type as "weekly_increment" | "increment",
+    when,
+    by,
+    cadence,
+    ...(scope ? { scope: scope as "set" | "exercise" | "session" } : {}),
+    ...(criteria ? { criteria } : {})
   };
 }
 
@@ -327,827 +1290,210 @@ function parseRepTarget(reps: unknown, path: string, diagnostics: Diagnostic[]):
   }
 
   if (!isRecord(reps)) {
-    addError(diagnostics, path, "Reps must be an integer or an object range {min,max}.");
+    addError(diagnostics, path, "Reps must be an integer, range object, or shorthand string.");
     return undefined;
   }
 
   const min = reps.min;
   const max = reps.max;
-
   if (typeof min !== "number" || !Number.isInteger(min) || min < 1) {
     addError(diagnostics, `${path}.min`, "Rep range min must be an integer >= 1.");
     return undefined;
   }
-
   if (typeof max !== "number" || !Number.isInteger(max) || max < min) {
     addError(diagnostics, `${path}.max`, "Rep range max must be an integer >= min.");
     return undefined;
   }
-
   return { min, max };
 }
 
-function parseIntensity(
-  intensity: unknown,
-  path: string,
-  diagnostics: Diagnostic[]
-): IntensityTarget | undefined {
-  if (intensity === undefined) {
-    return undefined;
-  }
-
-  if (typeof intensity === "string") {
-    try {
-      // Allow intensity fields to reuse the set shorthand intensity syntax (with or without leading "@").
-      return parseIntensity(parseIntensityExpression(intensity), path, diagnostics);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Invalid intensity shorthand.";
-      addError(diagnostics, path, message);
-      return undefined;
-    }
-  }
-
-  if (!isRecord(intensity)) {
-    addError(diagnostics, path, "Intensity must be an object.");
-    return undefined;
-  }
-
-  const type = intensity.type;
-
-  if (
-    type !== "percent_1rm" &&
-    type !== "rpe" &&
-    type !== "rir" &&
-    type !== "load" &&
-    type !== "load_range"
-  ) {
-    addError(
-      diagnostics,
-      `${path}.type`,
-      "Intensity type must be percent_1rm, rpe, rir, load, or load_range."
-    );
-    return undefined;
-  }
-
-  const plusLoadRaw = intensity.plus_load;
-
-  if (type === "load_range") {
-    if (plusLoadRaw !== undefined) {
-      addError(diagnostics, `${path}.plus_load`, "plus_load is only supported for percent_1rm intensity.");
-      return undefined;
-    }
-
-    const minRaw = intensity.min;
-    const maxRaw = intensity.max;
-
-    if (typeof minRaw !== "number") {
-      addError(diagnostics, `${path}.min`, "load_range intensity min must be a number.");
-      return undefined;
-    }
-
-    if (typeof maxRaw !== "number") {
-      addError(diagnostics, `${path}.max`, "load_range intensity max must be a number.");
-      return undefined;
-    }
-
-    if (!(minRaw > 0)) {
-      addError(diagnostics, `${path}.min`, "load_range intensity min must be > 0.");
-      return undefined;
-    }
-
-    if (maxRaw < minRaw) {
-      addError(diagnostics, `${path}.max`, "load_range intensity max must be >= min.");
-      return undefined;
-    }
-
-    const unitRaw = intensity.unit;
-    if (typeof unitRaw !== "string") {
-      addError(diagnostics, `${path}.unit`, "load_range intensity requires unit kg or lb.");
-      return undefined;
-    }
-
-    const unit = unitRaw.toLowerCase();
-    if (unit !== "kg" && unit !== "lb") {
-      addError(diagnostics, `${path}.unit`, "load_range intensity unit must be kg or lb.");
-      return undefined;
-    }
-
-    return { type: "load_range", min: minRaw, max: maxRaw, unit: unit as LoadUnit };
-  }
-
-  const value = intensity.value;
-
-  if (typeof value !== "number") {
-    addError(diagnostics, `${path}.value`, "Intensity value must be a number.");
-    return undefined;
-  }
-
-  if (type === "percent_1rm") {
-    if (!(value > 0 && value <= 150)) {
-      addError(diagnostics, `${path}.value`, "percent_1rm intensity must be > 0 and <= 150.");
-      return undefined;
-    }
-
-    let plus_load: { value: number; unit: LoadUnit } | undefined;
-
-    if (plusLoadRaw !== undefined) {
-      if (!isRecord(plusLoadRaw)) {
-        addError(diagnostics, `${path}.plus_load`, "plus_load must be an object {value,unit}.");
-        return undefined;
-      }
-
-      const plusValueRaw = plusLoadRaw.value;
-      if (typeof plusValueRaw !== "number" || !Number.isFinite(plusValueRaw)) {
-        addError(diagnostics, `${path}.plus_load.value`, "plus_load.value must be a finite number.");
-        return undefined;
-      }
-
-      const plusUnitRaw = plusLoadRaw.unit;
-      if (typeof plusUnitRaw !== "string") {
-        addError(diagnostics, `${path}.plus_load.unit`, "plus_load.unit must be kg or lb.");
-        return undefined;
-      }
-
-      const plusUnit = plusUnitRaw.toLowerCase();
-      if (plusUnit !== "kg" && plusUnit !== "lb") {
-        addError(diagnostics, `${path}.plus_load.unit`, "plus_load.unit must be kg or lb.");
-        return undefined;
-      }
-
-      plus_load = { value: plusValueRaw, unit: plusUnit as LoadUnit };
-    }
-
-    return { type, value, ...(plus_load ? { plus_load } : {}) };
-  }
-
-  if (plusLoadRaw !== undefined) {
-    addError(diagnostics, `${path}.plus_load`, "plus_load is only supported for percent_1rm intensity.");
-    return undefined;
-  }
-
-  if (type === "rpe") {
-    if (!(value >= 1 && value <= 10)) {
-      addError(diagnostics, `${path}.value`, "rpe intensity must be between 1 and 10.");
-      return undefined;
-    }
-
-    return { type, value };
-  }
-
-  if (type === "rir") {
-    if (!(value >= 0 && value <= 6)) {
-      addError(diagnostics, `${path}.value`, "rir intensity must be between 0 and 6.");
-      return undefined;
-    }
-
-    return { type, value };
-  }
-
-  if (!(value > 0)) {
-    addError(diagnostics, `${path}.value`, "load intensity must be > 0.");
-    return undefined;
-  }
-
-  const unitRaw = intensity.unit;
-  if (typeof unitRaw !== "string") {
-    addError(diagnostics, `${path}.unit`, "load intensity requires unit kg or lb.");
-    return undefined;
-  }
-
-  const unit = unitRaw.toLowerCase();
-  if (unit !== "kg" && unit !== "lb") {
-    addError(diagnostics, `${path}.unit`, "load intensity unit must be kg or lb.");
-    return undefined;
-  }
-
-  return { type: "load", value, unit: unit as LoadUnit };
-}
-
-function parseProgressionCondition(
-  condition: unknown,
-  intensity: IntensityTarget,
-  path: string,
-  diagnostics: Diagnostic[]
-): ProgressionCondition | undefined {
-  if (condition === undefined) {
-    return undefined;
-  }
-
-  if (!isRecord(condition)) {
-    addError(diagnostics, path, "progression.when must be an object.");
-    return undefined;
-  }
-
-  const type = condition.type;
-
-  if (type !== "session_success" && type !== "metric_vs_target") {
-    addError(
-      diagnostics,
-      `${path}.type`,
-      "progression.when.type must be session_success or metric_vs_target."
-    );
-    return undefined;
-  }
-
-  if (type === "session_success") {
-    const equalsRaw = condition.equals;
-
-    if (equalsRaw !== undefined && typeof equalsRaw !== "boolean") {
-      addError(diagnostics, `${path}.equals`, "session_success.equals must be a boolean.");
-      return undefined;
-    }
-
-    return {
-      type: "session_success",
-      equals: equalsRaw as boolean | undefined
-    };
-  }
-
-  if (intensity.type === "percent_1rm") {
-    addError(
-      diagnostics,
-      path,
-      "metric_vs_target conditions are not supported for percent_1rm intensity."
-    );
-    return undefined;
-  }
-
-  const metricRaw = condition.metric;
-  if (metricRaw !== "load" && metricRaw !== "rpe" && metricRaw !== "rir") {
-    addError(diagnostics, `${path}.metric`, "metric must be load, rpe, or rir.");
-    return undefined;
-  }
-
-  const opRaw = condition.op;
-  if (typeof opRaw !== "string" || !COMPARISON_OP_SET.has(opRaw)) {
-    addError(diagnostics, `${path}.op`, "op must be one of: >=, >, <=, <, ==, !=.");
-    return undefined;
-  }
-
-  const targetRaw = condition.target;
-  const defaultTarget = intensity.type === "load_range" ? "max" : "value";
-  const targetValue = targetRaw === undefined ? defaultTarget : targetRaw;
-
-  if (targetValue !== "value" && targetValue !== "min" && targetValue !== "max") {
-    addError(diagnostics, `${path}.target`, "target must be value, min, or max.");
-    return undefined;
-  }
-
-  if (intensity.type === "load_range") {
-    if (metricRaw !== "load") {
-      addError(diagnostics, `${path}.metric`, "load_range intensity progression must use metric load.");
-      return undefined;
-    }
-
-    if (targetValue === "value") {
-      addError(diagnostics, `${path}.target`, "load_range conditions require target min or max.");
-      return undefined;
-    }
-  } else if (intensity.type === "load") {
-    if (metricRaw !== "load") {
-      addError(diagnostics, `${path}.metric`, "load intensity progression must use metric load.");
-      return undefined;
-    }
-
-    if (targetValue !== "value") {
-      addError(diagnostics, `${path}.target`, "load conditions only support target value.");
-      return undefined;
-    }
-  } else if (intensity.type === "rpe") {
-    if (metricRaw !== "rpe") {
-      addError(diagnostics, `${path}.metric`, "rpe intensity progression must use metric rpe.");
-      return undefined;
-    }
-
-    if (targetValue !== "value") {
-      addError(diagnostics, `${path}.target`, "rpe conditions only support target value.");
-      return undefined;
-    }
-  } else if (intensity.type === "rir") {
-    if (metricRaw !== "rir") {
-      addError(diagnostics, `${path}.metric`, "rir intensity progression must use metric rir.");
-      return undefined;
-    }
-
-    if (targetValue !== "value") {
-      addError(diagnostics, `${path}.target`, "rir conditions only support target value.");
-      return undefined;
-    }
-  }
-
-  return {
-    type: "metric_vs_target",
-    metric: metricRaw,
-    op: opRaw as ComparisonOp,
-    target: targetValue as "value" | "min" | "max"
-  };
-}
-
-function parseProgressionCadence(
-  cadence: unknown,
-  path: string,
-  diagnostics: Diagnostic[]
-): ProgressionRule["cadence"] | undefined {
-  if (cadence === undefined) {
+function parseWarmup(warmup: unknown, path: string, diagnostics: Diagnostic[]): WarmupSpec | undefined {
+  if (warmup === undefined) {
     return undefined;
   }
 
   const startIndex = diagnostics.length;
-
-  if (!isRecord(cadence)) {
-    addError(diagnostics, path, "progression.cadence must be an object.");
+  if (!isRecord(warmup)) {
+    addError(diagnostics, path, "warmup must be an object.");
     return undefined;
   }
 
-  const type = cadence.type;
-  if (type !== "weeks" && type !== "sessions") {
-    addError(diagnostics, `${path}.type`, "progression.cadence.type must be weeks or sessions.");
-    return undefined;
+  const type = warmup.type ?? "percent_ramp";
+  const based_on_role = parseRole(warmup.based_on_role, `${path}.based_on_role`, diagnostics);
+
+  if (type === "percent_ramp") {
+    if (typeof warmup.from_percent !== "number" || !Number.isFinite(warmup.from_percent) || warmup.from_percent <= 0) {
+      addError(diagnostics, `${path}.from_percent`, "from_percent must be a number > 0.");
+    }
+    if (typeof warmup.to_percent !== "number" || !Number.isFinite(warmup.to_percent) || warmup.to_percent <= 0) {
+      addError(diagnostics, `${path}.to_percent`, "to_percent must be a number > 0.");
+    }
+    if (
+      typeof warmup.from_percent === "number" &&
+      typeof warmup.to_percent === "number" &&
+      warmup.to_percent < warmup.from_percent
+    ) {
+      addError(diagnostics, `${path}.to_percent`, "to_percent must be >= from_percent.");
+    }
+    if (typeof warmup.steps !== "number" || !Number.isInteger(warmup.steps) || warmup.steps < 1) {
+      addError(diagnostics, `${path}.steps`, "steps must be an integer >= 1.");
+    }
+    const reps = parseRepTarget(warmup.reps ?? 5, `${path}.reps`, diagnostics);
+    if (hasNewErrors(diagnostics, startIndex) || !reps) {
+      return undefined;
+    }
+    return {
+      type: "percent_ramp",
+      from_percent: warmup.from_percent as number,
+      to_percent: warmup.to_percent as number,
+      steps: warmup.steps as number,
+      reps,
+      ...(based_on_role ? { based_on_role } : {})
+    };
   }
 
-  const everyRaw = cadence.every;
-  if (everyRaw !== undefined) {
-    if (typeof everyRaw !== "number" || !Number.isInteger(everyRaw) || everyRaw < 1) {
-      addError(diagnostics, `${path}.every`, "progression.cadence.every must be an integer >= 1.");
+  if (type === "steps") {
+    if (!Array.isArray(warmup.steps) || warmup.steps.length === 0) {
+      addError(diagnostics, `${path}.steps`, "steps warmup requires a non-empty steps array.");
+      return undefined;
     }
-  }
 
-  const onWeekdaysRaw = cadence.on_weekdays;
-
-  if (type === "weeks") {
-    if (onWeekdaysRaw !== undefined) {
-      addError(diagnostics, `${path}.on_weekdays`, "progression.cadence.on_weekdays is only valid for sessions cadence.");
-    }
+    const steps: Array<{ percent?: number; reps?: RepTarget; note?: string }> = [];
+    warmup.steps.forEach((entry, index) => {
+      if (!isRecord(entry)) {
+        addError(diagnostics, `${path}.steps[${index}]`, "Warmup step must be an object.");
+        return;
+      }
+      let percent: number | undefined;
+      if (entry.percent !== undefined) {
+        if (typeof entry.percent !== "number" || !Number.isFinite(entry.percent) || entry.percent <= 0) {
+          addError(diagnostics, `${path}.steps[${index}].percent`, "percent must be a number > 0.");
+        } else {
+          percent = entry.percent;
+        }
+      }
+      const reps = entry.reps !== undefined ? parseRepTarget(entry.reps, `${path}.steps[${index}].reps`, diagnostics) : undefined;
+      let note: string | undefined;
+      if (entry.note !== undefined) {
+        if (typeof entry.note !== "string" || entry.note.trim() === "") {
+          addError(diagnostics, `${path}.steps[${index}].note`, "note must be a non-empty string.");
+        } else {
+          note = entry.note.trim();
+        }
+      }
+      steps.push({
+        ...(percent !== undefined ? { percent } : {}),
+        ...(reps ? { reps } : {}),
+        ...(note ? { note } : {})
+      });
+    });
 
     if (hasNewErrors(diagnostics, startIndex)) {
       return undefined;
     }
 
     return {
-      type: "weeks",
-      every: everyRaw as number | undefined
+      type: "steps",
+      steps,
+      ...(based_on_role ? { based_on_role } : {})
     };
   }
 
-  if (onWeekdaysRaw !== undefined) {
-    if (!Array.isArray(onWeekdaysRaw) || onWeekdaysRaw.length === 0) {
-      addError(diagnostics, `${path}.on_weekdays`, "on_weekdays must be a non-empty array.");
-    } else {
-      onWeekdaysRaw.forEach((value, index) => {
-        const weekdayPath = `${path}.on_weekdays[${index}]`;
-        if (typeof value !== "string" || !WEEKDAY_SET.has(value)) {
-          addError(diagnostics, weekdayPath, `Invalid weekday. Expected one of: ${WEEKDAYS.join(", ")}.`);
-        }
-      });
-    }
-  }
-
-  if (hasNewErrors(diagnostics, startIndex)) {
-    return undefined;
-  }
-
-  return {
-    type: "sessions",
-    every: everyRaw as number | undefined,
-    on_weekdays: onWeekdaysRaw as Weekday[] | undefined
-  };
+  addError(diagnostics, `${path}.type`, 'warmup.type must be "percent_ramp" or "steps".');
+  return undefined;
 }
 
-function parseProgressionShorthand(
-  progression: string,
-  intensity: IntensityTarget,
+function parseSubstitutions(
+  substitutions: unknown,
   path: string,
   diagnostics: Diagnostic[]
-): UnknownRecord | undefined {
-  const normalized = progression.trim().replace(/\s+/g, " ");
-  if (normalized === "") {
-    addError(diagnostics, path, "progression shorthand cannot be empty.");
+): ExerciseSubstitution[] | undefined {
+  if (substitutions === undefined) {
+    return undefined;
+  }
+  if (!Array.isArray(substitutions)) {
+    addError(diagnostics, path, "substitutions must be an array.");
     return undefined;
   }
 
-  const ifMatch = /\bif\b/i.exec(normalized);
-  const main = ifMatch ? normalized.slice(0, ifMatch.index).trim() : normalized;
-  const conditionRaw = ifMatch ? normalized.slice(ifMatch.index + ifMatch[0].length).trim() : undefined;
-
-  if (main === "") {
-    addError(diagnostics, path, "progression shorthand must start with an increment (e.g. +2.5).");
-    return undefined;
-  }
-
-  const byRangeMatch =
-    /^\s*(?<sign>[+-])?\s*\[\s*(?<min>\d+(?:\.\d+)?)\s*(?:,\s*(?<max>\d+(?:\.\d+)?)\s*)?\]\s*(?<unit>kg|kgs|lb|lbs)?/i.exec(
-      main
-    );
-
-  let by: WeeklyIncrementBy | undefined;
-  let byUnit: LoadUnit | undefined;
-  let byExplicitUnit: "percent" | "rpe" | "rir" | undefined;
-  let consumed = 0;
-
-  if (byRangeMatch?.groups?.min !== undefined) {
-    const sign = byRangeMatch.groups.sign === "-" ? -1 : 1;
-    const min = Number(byRangeMatch.groups.min) * sign;
-    const max =
-      byRangeMatch.groups.max !== undefined ? Number(byRangeMatch.groups.max) * sign : undefined;
-
-    if (!Number.isFinite(min) || (max !== undefined && !Number.isFinite(max))) {
-      addError(diagnostics, path, "Invalid progression increment.");
-      return undefined;
+  const result: ExerciseSubstitution[] = [];
+  substitutions.forEach((entry, index) => {
+    const itemPath = `${path}[${index}]`;
+    if (!isRecord(entry)) {
+      addError(diagnostics, itemPath, "substitution entry must be an object.");
+      return;
     }
 
-    if (intensity.type !== "load_range") {
-      addError(diagnostics, path, "Bracketed progression increments are only valid for load_range intensity.");
-      return undefined;
+    const exercise_id =
+      typeof entry.exercise_id === "string" && entry.exercise_id.trim() !== ""
+        ? entry.exercise_id.trim()
+        : undefined;
+    const exercise =
+      typeof entry.exercise === "string" && entry.exercise.trim() !== "" ? entry.exercise.trim() : undefined;
+    if (!exercise_id && !exercise) {
+      addError(diagnostics, itemPath, "substitution requires exercise_id or exercise.");
+      return;
     }
 
-    by = max === undefined ? min : { min, max };
-
-    if (byRangeMatch.groups.unit) {
-      const unitToken = byRangeMatch.groups.unit.toLowerCase();
-      byUnit = unitToken === "kg" || unitToken === "kgs" ? "kg" : "lb";
-    }
-
-    consumed = byRangeMatch[0].length;
-  } else {
-    const byMatch =
-      /^\s*(?<sign>[+-])?\s*(?<value>\d+(?:\.\d+)?)\s*(?<unit>%\s*(?:1\s*rm)?|rpe|rir|kg|kgs|lb|lbs)?/i.exec(main);
-
-    if (!byMatch?.groups?.value) {
-      addError(diagnostics, path, "progression shorthand must start with an increment (e.g. +2.5).");
-      return undefined;
-    }
-
-    const sign = byMatch.groups.sign === "-" ? -1 : 1;
-    const value = Number(byMatch.groups.value) * sign;
-
-    if (!Number.isFinite(value)) {
-      addError(diagnostics, path, "Invalid progression increment.");
-      return undefined;
-    }
-
-    by = value;
-
-    if (byMatch.groups.unit) {
-      const unitToken = byMatch.groups.unit.replace(/\s+/g, "").toLowerCase();
-      if (unitToken.startsWith("%")) {
-        byExplicitUnit = "percent";
-      } else if (unitToken === "rpe") {
-        byExplicitUnit = "rpe";
-      } else if (unitToken === "rir") {
-        byExplicitUnit = "rir";
+    let rank: number | undefined;
+    if (entry.rank !== undefined) {
+      if (typeof entry.rank !== "number" || !Number.isInteger(entry.rank) || entry.rank < 1) {
+        addError(diagnostics, `${itemPath}.rank`, "rank must be an integer >= 1.");
       } else {
-        byUnit = unitToken === "kg" || unitToken === "kgs" ? "kg" : "lb";
+        rank = entry.rank;
       }
     }
 
-    consumed = byMatch[0].length;
-  }
-
-  if (byExplicitUnit === "percent") {
-    if (intensity.type !== "percent_1rm") {
-      addError(diagnostics, path, "Percent units in progression shorthand are only valid for percent_1rm intensity.");
-      return undefined;
-    }
-  } else if (byExplicitUnit === "rpe") {
-    if (intensity.type !== "rpe") {
-      addError(diagnostics, path, "RPE units in progression shorthand are only valid for rpe intensity.");
-      return undefined;
-    }
-  } else if (byExplicitUnit === "rir") {
-    if (intensity.type !== "rir") {
-      addError(diagnostics, path, "RIR units in progression shorthand are only valid for rir intensity.");
-      return undefined;
-    }
-  }
-
-  if (byUnit !== undefined) {
-    if (intensity.type === "load" || intensity.type === "load_range") {
-      if (intensity.unit !== byUnit) {
-        addError(diagnostics, path, `Progression unit ${byUnit} does not match intensity unit ${intensity.unit}.`);
-        return undefined;
-      }
-    } else if (intensity.type === "percent_1rm") {
-      if (intensity.plus_load?.unit !== undefined && intensity.plus_load.unit !== byUnit) {
-        addError(
-          diagnostics,
-          path,
-          `Progression unit ${byUnit} does not match intensity.plus_load unit ${intensity.plus_load.unit}.`
+    const tags = parseStringArray(entry.tags, `${itemPath}.tags`, diagnostics);
+    let constraints: ExerciseSubstitution["constraints"] | undefined;
+    if (entry.constraints !== undefined) {
+      if (!isRecord(entry.constraints)) {
+        addError(diagnostics, `${itemPath}.constraints`, "constraints must be an object.");
+      } else {
+        const requires = parseStringArray(
+          entry.constraints.requires,
+          `${itemPath}.constraints.requires`,
+          diagnostics
         );
-        return undefined;
-      }
-
-      if (typeof by !== "number") {
-        addError(diagnostics, path, "Load-unit progression increments for percent_1rm intensity must be a number.");
-        return undefined;
-      }
-
-      // For percent_1rm intensity, a kg/lb increment means "add to computed load", represented as a load delta.
-      by = { type: "load", value: by, unit: byUnit };
-    } else {
-      addError(diagnostics, path, "Units in progression shorthand are only valid for load/load_range or percent_1rm intensity.");
-      return undefined;
-    }
-  }
-
-  let remainder = main.slice(consumed).trim();
-
-  // Optional weekday filter suffix: "on FRI" / "only Friday"
-  let onWeekdays: Weekday[] | undefined;
-  const onMatch = /\b(?:on|only)\s+(?<days>[A-Za-z,\s/]+)$/i.exec(remainder);
-  if (onMatch?.groups?.days !== undefined) {
-    const parsedDays = parseWeekdayList(onMatch.groups.days);
-    if (parsedDays.unknown.length > 0) {
-      addError(diagnostics, path, `Invalid weekday(s) in progression shorthand: ${parsedDays.unknown.join(", ")}.`);
-      return undefined;
-    }
-
-    if (parsedDays.days.length > 0) {
-      onWeekdays = parsedDays.days;
-      remainder = remainder.slice(0, onMatch.index).trim();
-    }
-  }
-
-  // Default cadence: weekly.
-  let cadenceType: "weeks" | "sessions" = "weeks";
-  let cadenceEvery = 1;
-
-  if (remainder !== "") {
-    const slashCadence = /^\/\s*(?<every>\d+)?\s*(?<unit>w|weeks?|s|sessions?)\s*$/i.exec(remainder);
-    if (slashCadence?.groups?.unit !== undefined) {
-      const unit = slashCadence.groups.unit.toLowerCase();
-      cadenceType = unit.startsWith("w") ? "weeks" : "sessions";
-      cadenceEvery = slashCadence.groups.every ? Number(slashCadence.groups.every) : 1;
-    } else {
-      const otherCadence = /^(?:every\s+)?other\s+(?<unit>week|weeks|w|session|sessions|s)$/i.exec(remainder);
-      if (otherCadence?.groups?.unit !== undefined) {
-        const unit = otherCadence.groups.unit.toLowerCase();
-        cadenceType = unit.startsWith("w") ? "weeks" : "sessions";
-        cadenceEvery = 2;
-      } else {
-        const cadenceMatch =
-          /^(?:every\s+)?(?<every>\d+)?\s*(?<unit>week|weeks|w|session|sessions|s)$/i.exec(remainder);
-        if (cadenceMatch?.groups?.unit !== undefined) {
-          const unit = cadenceMatch.groups.unit.toLowerCase();
-          cadenceType = unit.startsWith("w") ? "weeks" : "sessions";
-          cadenceEvery = cadenceMatch.groups.every ? Number(cadenceMatch.groups.every) : 1;
-        } else if (/^weekly$/i.test(remainder)) {
-          cadenceType = "weeks";
-          cadenceEvery = 1;
-        } else {
-          addError(
-            diagnostics,
-            path,
-            'Invalid progression cadence shorthand. Use e.g. "every week", "every 2 weeks", "every 3 sessions", or "/3s".'
-          );
-          return undefined;
+        if (requires && requires.length > 0) {
+          constraints = { requires };
         }
       }
     }
 
-    if (!Number.isInteger(cadenceEvery) || cadenceEvery < 1) {
-      addError(diagnostics, path, "progression cadence must be an integer >= 1.");
-      return undefined;
-    }
-  }
+    result.push({
+      ...(exercise_id ? { exercise_id } : {}),
+      ...(exercise ? { exercise } : {}),
+      ...(rank !== undefined ? { rank } : {}),
+      ...(tags && tags.length > 0 ? { tags } : {}),
+      ...(constraints ? { constraints } : {})
+    });
+  });
 
-  if (onWeekdays && cadenceType === "weeks") {
-    // A weekday filter implies session-based cadence (e.g. "every 2 weeks on Fri" => "every 2 Fri occurrences").
-    cadenceType = "sessions";
-  }
-
-  const cadence: UnknownRecord =
-    cadenceType === "weeks"
-      ? { type: "weeks", every: cadenceEvery }
-      : { type: "sessions", every: cadenceEvery, on_weekdays: onWeekdays };
-
-  let when: UnknownRecord | undefined;
-
-  if (conditionRaw !== undefined) {
-    const condition = conditionRaw.trim();
-    if (condition === "") {
-      addError(diagnostics, path, "progression shorthand if-clause cannot be empty.");
-      return undefined;
-    }
-
-    if (/^(success|succeeded|pass|passed)$/i.test(condition)) {
-      when = { type: "session_success", equals: true };
-    } else if (/^(fail|failed|failure)$/i.test(condition)) {
-      when = { type: "session_success", equals: false };
-    } else {
-      const metricOpTarget =
-        /^(?<metric>load|rpe|rir)\s*(?<op>>=|>|<=|<|==|!=)\s*(?<target>target|value|min|max)?$/i.exec(condition);
-
-      const opTargetOnly =
-        /^(?<op>>=|>|<=|<|==|!=)\s*(?<target>target|value|min|max)?$/i.exec(condition);
-
-      const metric =
-        metricOpTarget?.groups?.metric !== undefined
-          ? metricOpTarget.groups.metric.toLowerCase()
-          : undefined;
-      const op =
-        metricOpTarget?.groups?.op !== undefined ? metricOpTarget.groups.op : opTargetOnly?.groups?.op;
-      const targetRaw =
-        metricOpTarget?.groups?.target !== undefined ? metricOpTarget.groups.target : opTargetOnly?.groups?.target;
-
-      let inferredMetric = metric;
-      if (!inferredMetric) {
-        if (intensity.type === "load" || intensity.type === "load_range") {
-          inferredMetric = "load";
-        } else if (intensity.type === "rpe") {
-          inferredMetric = "rpe";
-        } else if (intensity.type === "rir") {
-          inferredMetric = "rir";
-        } else {
-          addError(diagnostics, path, "Cannot infer metric for progression condition with percent_1rm intensity.");
-          return undefined;
-        }
-      }
-
-      if (!op || !COMPARISON_OP_SET.has(op)) {
-        addError(diagnostics, path, "Invalid progression condition operator. Use one of: >=, >, <=, <, ==, !=.");
-        return undefined;
-      }
-
-      let target: "value" | "min" | "max" | undefined;
-      if (targetRaw !== undefined) {
-        const token = targetRaw.toLowerCase();
-        if (token === "min") {
-          target = "min";
-        } else if (token === "max") {
-          target = "max";
-        } else if (token === "value") {
-          target = "value";
-        } else {
-          target = undefined;
-        }
-      }
-
-      when = {
-        type: "metric_vs_target",
-        metric: inferredMetric,
-        op,
-        ...(target ? { target } : {})
-      };
-    }
-  }
-
-  return {
-    type: "increment",
-    by,
-    cadence,
-    ...(when ? { when } : {})
-  };
+  return result;
 }
 
-function parseProgression(
-  progression: unknown,
-  intensity: IntensityTarget | undefined,
+function parseInlineStringMap(
+  value: unknown,
   path: string,
   diagnostics: Diagnostic[]
-): ProgressionRule | undefined {
-  if (progression === undefined) {
+): Record<string, string> | undefined {
+  if (value === undefined) {
     return undefined;
   }
-
-  const startIndex = diagnostics.length;
-
-  let progressionValue: unknown = progression;
-
-  if (typeof progression === "string") {
-    if (!intensity) {
-      addError(diagnostics, path, "progression requires intensity.");
-      return undefined;
-    }
-
-    progressionValue = parseProgressionShorthand(progression, intensity, path, diagnostics);
-    if (progressionValue === undefined) {
-      return undefined;
-    }
-  }
-
-  if (!isRecord(progressionValue)) {
-    addError(diagnostics, path, "progression must be an object or shorthand string.");
+  if (!isRecord(value)) {
+    addError(diagnostics, path, "Expected an object map of strings.");
     return undefined;
   }
-
-  const type = progressionValue.type;
-  if (type !== "weekly_increment" && type !== "increment") {
-    addError(diagnostics, `${path}.type`, "progression.type must be weekly_increment or increment.");
-    return undefined;
-  }
-
-  if (!intensity) {
-    addError(diagnostics, path, "progression requires intensity.");
-    return undefined;
-  }
-
-  const when = parseProgressionCondition(progressionValue.when, intensity, `${path}.when`, diagnostics);
-  const cadence = parseProgressionCadence(progressionValue.cadence, `${path}.cadence`, diagnostics);
-
-  if (type === "increment" && cadence === undefined) {
-    addError(diagnostics, `${path}.cadence`, "increment progression requires cadence.");
-    return undefined;
-  }
-
-  const byRaw = progressionValue.by;
-  if (byRaw === undefined) {
-    addError(diagnostics, `${path}.by`, "weekly_increment progression requires by.");
-    return undefined;
-  }
-
-  let by: WeeklyIncrementBy | undefined;
-
-  if (isRecord(byRaw) && byRaw.type === "load") {
-    const valueRaw = byRaw.value;
-    if (typeof valueRaw !== "number" || !Number.isFinite(valueRaw)) {
-      addError(diagnostics, `${path}.by.value`, "by.value must be a finite number.");
-      return undefined;
+  const result: Record<string, string> = {};
+  for (const [key, raw] of Object.entries(value)) {
+    if (typeof raw !== "string" || raw.trim() === "") {
+      addError(diagnostics, `${path}.${key}`, "Map values must be non-empty strings.");
+      continue;
     }
-
-    const unitRaw = byRaw.unit;
-    if (typeof unitRaw !== "string") {
-      addError(diagnostics, `${path}.by.unit`, "by.unit must be kg or lb.");
-      return undefined;
-    }
-
-    const unit = unitRaw.toLowerCase();
-    if (unit !== "kg" && unit !== "lb") {
-      addError(diagnostics, `${path}.by.unit`, "by.unit must be kg or lb.");
-      return undefined;
-    }
-
-    if (intensity.type === "load" || intensity.type === "load_range") {
-      if (intensity.unit !== unit) {
-        addError(diagnostics, `${path}.by`, `Progression unit ${unit} does not match intensity unit ${intensity.unit}.`);
-        return undefined;
-      }
-    } else if (intensity.type === "percent_1rm") {
-      if (intensity.plus_load?.unit !== undefined && intensity.plus_load.unit !== unit) {
-        addError(
-          diagnostics,
-          `${path}.by`,
-          `Progression unit ${unit} does not match intensity.plus_load unit ${intensity.plus_load.unit}.`
-        );
-        return undefined;
-      }
-    } else {
-      addError(diagnostics, `${path}.by`, "Load-unit progression increments are only valid for load/load_range/percent_1rm intensity.");
-      return undefined;
-    }
-
-    by = { type: "load", value: valueRaw, unit: unit as LoadUnit };
-  } else if (intensity.type === "load_range") {
-    if (typeof byRaw === "number") {
-      if (!Number.isFinite(byRaw)) {
-        addError(diagnostics, `${path}.by`, "by must be a finite number.");
-      } else {
-        by = byRaw;
-      }
-    } else if (isRecord(byRaw)) {
-      const minRaw = byRaw.min;
-      const maxRaw = byRaw.max;
-
-      if (minRaw === undefined && maxRaw === undefined) {
-        addError(diagnostics, `${path}.by`, "by must include at least one of: min, max.");
-      }
-
-      if (minRaw !== undefined) {
-        if (typeof minRaw !== "number" || !Number.isFinite(minRaw)) {
-          addError(diagnostics, `${path}.by.min`, "by.min must be a finite number.");
-        }
-      }
-
-      if (maxRaw !== undefined) {
-        if (typeof maxRaw !== "number" || !Number.isFinite(maxRaw)) {
-          addError(diagnostics, `${path}.by.max`, "by.max must be a finite number.");
-        }
-      }
-
-      by = {
-        min: minRaw as number | undefined,
-        max: maxRaw as number | undefined
-      };
-    } else {
-      addError(diagnostics, `${path}.by`, "by must be a number or an object {min,max}.");
-    }
-  } else {
-    if (typeof byRaw !== "number" || !Number.isFinite(byRaw)) {
-      addError(diagnostics, `${path}.by`, "by must be a finite number.");
-    } else {
-      by = byRaw;
-    }
+    result[key] = raw.trim();
   }
-
-  if (hasNewErrors(diagnostics, startIndex)) {
-    return undefined;
-  }
-
-  return {
-    type: type as "weekly_increment" | "increment",
-    when,
-    by: by as WeeklyIncrementBy,
-    cadence
-  };
+  return Object.keys(result).length > 0 ? result : undefined;
 }
 
 function parseSetShorthandBlock(raw: string, path: string, diagnostics: Diagnostic[]): SetPrescription[] {
@@ -1158,21 +1504,17 @@ function parseSetShorthandBlock(raw: string, path: string, diagnostics: Diagnost
   lines.forEach((line, lineIndex) => {
     const lineNumber = lineIndex + 1;
     const trimmedLine = line.trim();
-
     if (trimmedLine === "" || trimmedLine.startsWith("#")) {
       return;
     }
 
-    // Allow semicolon-separated entries (useful for one-line exercise shorthand).
     const segments = trimmedLine.split(";");
-
     segments.forEach((segment) => {
       let entry = segment.trim();
       if (entry === "" || entry.startsWith("#")) {
         return;
       }
 
-      // Strip a common bullet prefix (useful inside YAML block scalars).
       entry = entry.replace(/^\-\s+/, "");
 
       let note: string | undefined;
@@ -1181,29 +1523,21 @@ function parseSetShorthandBlock(raw: string, path: string, diagnostics: Diagnost
         note = entry.slice(hashIndex + 1).trim();
         entry = entry.slice(0, hashIndex).trim();
       }
-
       if (entry === "") {
         return;
       }
 
       try {
-        const shorthand = parseShorthand(entry);
+        const parsed = parseShorthand(entry);
         const linePath = annotateLinePaths ? `${path}[line ${lineNumber}]` : path;
-        const intensity = parseIntensity(shorthand.intensity, `${linePath}.intensity`, diagnostics);
-
-        if (shorthand.intensity !== undefined && intensity === undefined) {
+        const intensity = parseIntensity(parsed.intensity, `${linePath}.intensity`, diagnostics);
+        if (parsed.intensity !== undefined && intensity === undefined) {
           return;
         }
-
-        const setValue: SetPrescription = {
-          ...shorthand,
-          intensity
-        };
-
-        if (note && note !== "") {
+        const setValue: SetPrescription = { ...parsed, intensity };
+        if (note) {
           setValue.note = note;
         }
-
         sets.push(setValue);
       } catch (error) {
         const message = error instanceof Error ? error.message : "Invalid shorthand expression.";
@@ -1213,6 +1547,38 @@ function parseSetShorthandBlock(raw: string, path: string, diagnostics: Diagnost
   });
 
   return sets;
+}
+
+function validateRoleReferences(
+  exercise: ExercisePrescription,
+  path: string,
+  diagnostics: Diagnostic[]
+): void {
+  const seenRoles = new Set<string>();
+  exercise.sets.forEach((set, index) => {
+    const intensity = set.intensity;
+    if (intensity && (intensity.type === "percent_of_set" || intensity.type === "load_delta_from_set")) {
+      if (!seenRoles.has(intensity.role)) {
+        addError(
+          diagnostics,
+          `${path}.sets[${index}].intensity.role`,
+          `Referenced role "${intensity.role}" must exist in a prior set.`
+        );
+      }
+    }
+    if (set.role) {
+      seenRoles.add(set.role);
+    }
+  });
+
+  const basedOnRole = exercise.warmup?.based_on_role;
+  if (basedOnRole && !exercise.sets.some((set) => set.role === basedOnRole)) {
+    addError(
+      diagnostics,
+      `${path}.warmup.based_on_role`,
+      `warmup.based_on_role "${basedOnRole}" must match at least one set role.`
+    );
+  }
 }
 
 function parseSet(
@@ -1238,48 +1604,65 @@ function parseSet(
   const shorthandRaw = set.shorthand;
   if (typeof shorthandRaw === "string") {
     if (set.count !== undefined || set.reps !== undefined || set.intensity !== undefined) {
-      addError(
-        diagnostics,
-        path,
-        "Set object may specify either shorthand or (count,reps,intensity), not both."
-      );
+      addError(diagnostics, path, "Set may specify shorthand or structured fields, not both.");
       return undefined;
     }
 
     const shorthandSets = parseSetShorthandBlock(shorthandRaw, `${path}.shorthand`, diagnostics);
-
-    const wrapperNote = set.note;
-    if (wrapperNote !== undefined && typeof wrapperNote !== "string") {
-      addError(diagnostics, `${path}.note`, "Set note must be a string.");
+    const wrapperRole = parseRole(set.role, `${path}.role`, diagnostics);
+    const wrapperConstraints = parseConstraints(set.constraints, `${path}.constraints`, diagnostics);
+    const wrapperRepeat = parseRepeat(set.repeat, `${path}.repeat`, diagnostics);
+    const wrapperTempo = parseTempo(set.tempo, `${path}.tempo`, diagnostics);
+    const hasWrapperRestSeconds = set.rest_seconds !== undefined;
+    const hasWrapperRestAlias = set.rest !== undefined;
+    if (hasWrapperRestSeconds && hasWrapperRestAlias) {
+      addError(diagnostics, `${path}.rest_seconds`, "Specify either rest_seconds or rest, not both.");
+      addError(diagnostics, `${path}.rest`, "Specify either rest_seconds or rest, not both.");
     }
+    const wrapperRestSeconds = parseDurationSeconds(
+      hasWrapperRestAlias ? set.rest : set.rest_seconds,
+      hasWrapperRestAlias ? `${path}.rest` : `${path}.rest_seconds`,
+      diagnostics
+    );
+    const wrapperRestBefore = parseDurationSeconds(
+      set.rest_before ?? set.rest_before_seconds,
+      set.rest_before !== undefined ? `${path}.rest_before` : `${path}.rest_before_seconds`,
+      diagnostics
+    );
+    const wrapperRestAfter = parseDurationSeconds(
+      set.rest_after ?? set.rest_after_seconds,
+      set.rest_after !== undefined ? `${path}.rest_after` : `${path}.rest_after_seconds`,
+      diagnostics
+    );
 
     const expanded: SetPrescription[] = [];
-
     shorthandSets.forEach((entry) => {
-      const intensity = entry.intensity;
-      const progression = parseProgression(set.progression, intensity, `${path}.progression`, diagnostics);
-
-      let note: string | undefined = wrapperNote as string | undefined;
-      if (entry.note) {
-        note = note ? `${note}; ${entry.note}` : entry.note;
-      }
-
-      const expandedSet: SetPrescription = {
+      const progression = parseProgression(set.progression, entry.intensity, `${path}.progression`, diagnostics);
+      expanded.push({
         ...entry,
-        progression
-      };
-
-      if (note !== undefined) {
-        expandedSet.note = note;
-      }
-
-      expanded.push(expandedSet);
+        ...(wrapperRole && !entry.role ? { role: wrapperRole } : {}),
+        ...(wrapperConstraints && !entry.constraints ? { constraints: wrapperConstraints } : {}),
+        ...(wrapperRepeat && !entry.repeat ? { repeat: wrapperRepeat } : {}),
+        ...(wrapperTempo && !entry.tempo ? { tempo: wrapperTempo } : {}),
+        ...(wrapperRestSeconds !== undefined && entry.rest_seconds === undefined
+          ? { rest_seconds: wrapperRestSeconds }
+          : {}),
+        ...(wrapperRestBefore !== undefined && entry.rest_before_seconds === undefined
+          ? { rest_before_seconds: wrapperRestBefore }
+          : {}),
+        ...(wrapperRestAfter !== undefined && entry.rest_after_seconds === undefined
+          ? { rest_after_seconds: wrapperRestAfter }
+          : {}),
+        ...(progression ? { progression } : {}),
+        ...(typeof set.note === "string" && set.note.trim() !== ""
+          ? { note: entry.note ? `${set.note.trim()}; ${entry.note}` : set.note.trim() }
+          : {})
+      });
     });
 
     if (hasNewErrors(diagnostics, startIndex)) {
       return undefined;
     }
-
     return expanded;
   }
 
@@ -1288,13 +1671,132 @@ function parseSet(
     addError(diagnostics, `${path}.count`, "Set count must be an integer >= 1.");
   }
 
-  const reps = parseRepTarget(set.reps, `${path}.reps`, diagnostics);
-  const intensity = parseIntensity(set.intensity, `${path}.intensity`, diagnostics);
-  const progression = parseProgression(set.progression, intensity, `${path}.progression`, diagnostics);
+  const work_type =
+    set.work_type === undefined
+      ? undefined
+      : set.work_type === "reps" || set.work_type === "time"
+        ? set.work_type
+        : undefined;
+  if (set.work_type !== undefined && work_type === undefined) {
+    addError(diagnostics, `${path}.work_type`, 'work_type must be "reps" or "time".');
+  }
 
-  const note = set.note;
-  if (note !== undefined && typeof note !== "string") {
-    addError(diagnostics, `${path}.note`, "Set note must be a string.");
+  const inferredTimeMode =
+    set.time_mode === "amrap" ||
+    set.time_mode === "emom" ||
+    set.time_mode === "for_time" ||
+    set.time_mode === "density";
+  const effectiveWorkType: "reps" | "time" =
+    work_type ?? (inferredTimeMode || set.duration_seconds !== undefined ? "time" : "reps");
+
+  const time_mode =
+    set.time_mode === undefined ||
+    set.time_mode === "amrap" ||
+    set.time_mode === "emom" ||
+    set.time_mode === "for_time" ||
+    set.time_mode === "density"
+      ? (set.time_mode as "amrap" | "emom" | "for_time" | "density" | undefined)
+      : undefined;
+  if (set.time_mode !== undefined && time_mode === undefined) {
+    addError(diagnostics, `${path}.time_mode`, 'time_mode must be amrap, emom, for_time, or density.');
+  }
+
+  const reps = set.reps !== undefined ? parseRepTarget(set.reps, `${path}.reps`, diagnostics) : undefined;
+  if (effectiveWorkType === "reps" && reps === undefined) {
+    addError(diagnostics, `${path}.reps`, "reps is required when work_type is reps.");
+  }
+
+  const duration_seconds = parseDurationSeconds(set.duration_seconds, `${path}.duration_seconds`, diagnostics);
+  if (effectiveWorkType === "time" && duration_seconds === undefined) {
+    addError(diagnostics, `${path}.duration_seconds`, "duration_seconds is required when work_type is time.");
+  }
+  if (effectiveWorkType === "reps" && duration_seconds !== undefined) {
+    addError(diagnostics, `${path}.duration_seconds`, "duration_seconds is only valid when work_type is time.");
+  }
+
+  const interval_seconds = parseDurationSeconds(set.interval_seconds, `${path}.interval_seconds`, diagnostics);
+  if (effectiveWorkType === "reps" && interval_seconds !== undefined) {
+    addError(diagnostics, `${path}.interval_seconds`, "interval_seconds is only valid when work_type is time.");
+  }
+
+  let target_total_reps: number | undefined;
+  if (set.target_total_reps !== undefined) {
+    if (
+      typeof set.target_total_reps !== "number" ||
+      !Number.isInteger(set.target_total_reps) ||
+      set.target_total_reps < 1
+    ) {
+      addError(diagnostics, `${path}.target_total_reps`, "target_total_reps must be an integer >= 1.");
+    } else {
+      target_total_reps = set.target_total_reps;
+    }
+  }
+  if (effectiveWorkType === "reps" && target_total_reps !== undefined) {
+    addError(diagnostics, `${path}.target_total_reps`, "target_total_reps is only valid when work_type is time.");
+  }
+  if (time_mode === "emom" && reps === undefined) {
+    addError(diagnostics, `${path}.reps`, "EMOM sets require reps.");
+  }
+  if (time_mode === "emom" && interval_seconds === undefined) {
+    addWarning(
+      diagnostics,
+      `${path}.interval_seconds`,
+      "EMOM defaults to 60s intervals when interval_seconds is omitted."
+    );
+  }
+  if (time_mode === "density" && target_total_reps === undefined) {
+    addWarning(
+      diagnostics,
+      `${path}.target_total_reps`,
+      "Density sets usually define target_total_reps."
+    );
+  }
+  if (time_mode === "for_time" && target_total_reps === undefined && reps === undefined) {
+    addWarning(
+      diagnostics,
+      path,
+      "for_time sets usually define reps or target_total_reps."
+    );
+  }
+
+  const intensity = parseIntensity(set.intensity, `${path}.intensity`, diagnostics);
+  const role = parseRole(set.role, `${path}.role`, diagnostics);
+
+  const hasRestSeconds = set.rest_seconds !== undefined;
+  const hasRestAlias = set.rest !== undefined;
+  if (hasRestSeconds && hasRestAlias) {
+    addError(diagnostics, `${path}.rest_seconds`, "Specify either rest_seconds or rest, not both.");
+    addError(diagnostics, `${path}.rest`, "Specify either rest_seconds or rest, not both.");
+  }
+  const rest_seconds = parseDurationSeconds(
+    hasRestAlias ? set.rest : set.rest_seconds,
+    hasRestAlias ? `${path}.rest` : `${path}.rest_seconds`,
+    diagnostics
+  );
+  const rest_before_seconds = parseDurationSeconds(
+    set.rest_before ?? set.rest_before_seconds,
+    set.rest_before !== undefined ? `${path}.rest_before` : `${path}.rest_before_seconds`,
+    diagnostics
+  );
+  const rest_after_seconds = parseDurationSeconds(
+    set.rest_after ?? set.rest_after_seconds,
+    set.rest_after !== undefined ? `${path}.rest_after` : `${path}.rest_after_seconds`,
+    diagnostics
+  );
+
+  const constraints = parseConstraints(set.constraints, `${path}.constraints`, diagnostics);
+  const repeat = parseRepeat(set.repeat, `${path}.repeat`, diagnostics);
+  if (constraints?.max_sets !== undefined && repeat?.max_sets !== undefined && repeat.max_sets > constraints.max_sets) {
+    addError(diagnostics, `${path}.repeat.max_sets`, "repeat.max_sets cannot exceed constraints.max_sets.");
+  }
+
+  const progression = parseProgression(set.progression, intensity, `${path}.progression`, diagnostics);
+  const tempo = parseTempo(set.tempo, `${path}.tempo`, diagnostics);
+  const pause_seconds = parseDurationSeconds(set.pause_seconds, `${path}.pause_seconds`, diagnostics);
+  const eccentric_seconds = parseDurationSeconds(set.eccentric_seconds, `${path}.eccentric_seconds`, diagnostics);
+
+  if (set.note !== undefined && (typeof set.note !== "string" || set.note.trim() === "")) {
+    addError(diagnostics, `${path}.note`, "Set note must be a non-empty string.");
   }
 
   if (hasNewErrors(diagnostics, startIndex)) {
@@ -1304,19 +1806,29 @@ function parseSet(
   return [
     {
       count: count as number,
-      reps: reps as RepTarget,
-      intensity,
-      progression,
-      note: note as string | undefined
+      ...(reps ? { reps } : {}),
+      ...((work_type ?? effectiveWorkType) === "time" ? { work_type: "time" as const } : {}),
+      ...(time_mode ? { time_mode } : {}),
+      ...(duration_seconds !== undefined ? { duration_seconds } : {}),
+      ...(interval_seconds !== undefined ? { interval_seconds } : {}),
+      ...(target_total_reps !== undefined ? { target_total_reps } : {}),
+      ...(intensity ? { intensity } : {}),
+      ...(role ? { role } : {}),
+      ...(rest_seconds !== undefined ? { rest_seconds } : {}),
+      ...(rest_before_seconds !== undefined ? { rest_before_seconds } : {}),
+      ...(rest_after_seconds !== undefined ? { rest_after_seconds } : {}),
+      ...(constraints ? { constraints } : {}),
+      ...(repeat ? { repeat } : {}),
+      ...(progression ? { progression } : {}),
+      ...(tempo ? { tempo } : {}),
+      ...(pause_seconds !== undefined ? { pause_seconds } : {}),
+      ...(eccentric_seconds !== undefined ? { eccentric_seconds } : {}),
+      ...(typeof set.note === "string" ? { note: set.note.trim() } : {})
     }
   ];
 }
 
-function parseSets(
-  setsRaw: unknown,
-  path: string,
-  diagnostics: Diagnostic[]
-): SetPrescription[] | undefined {
+function parseSets(setsRaw: unknown, path: string, diagnostics: Diagnostic[]): SetPrescription[] | undefined {
   if (typeof setsRaw === "string") {
     return parseSetShorthandBlock(setsRaw, path, diagnostics);
   }
@@ -1332,8 +1844,44 @@ function parseSets(
     return sets;
   }
 
-  addError(diagnostics, path, "sets must be an array, a shorthand string, or a shorthand block string.");
+  addError(diagnostics, path, "sets must be an array, shorthand string, or shorthand block string.");
   return undefined;
+}
+
+function parseWarmupGroupFromName(name: string): { exercise: string; group_id?: string } {
+  const match = /^(?<label>[A-Za-z]+)(?<order>\d+)\s+(?<exercise>.+)$/.exec(name.trim());
+  if (!match?.groups?.label || !match.groups.order || !match.groups.exercise) {
+    return { exercise: name.trim() };
+  }
+
+  return {
+    exercise: match.groups.exercise.trim(),
+    group_id: match.groups.label.toUpperCase()
+  };
+}
+
+function isRestDirectiveLine(raw: string): boolean {
+  const match = /^rest\b\s*[:=]?\s*(?<dur>.+)$/i.exec(raw.trim());
+  if (!match?.groups?.dur) {
+    return false;
+  }
+  return /^\d/.test(match.groups.dur.trim());
+}
+
+function parseRestDirectiveSeconds(
+  raw: string,
+  path: string,
+  diagnostics: Diagnostic[]
+): number | undefined | null {
+  const match = /^rest\b\s*[:=]?\s*(?<dur>.+)$/i.exec(raw.trim());
+  if (!match?.groups?.dur) {
+    return null;
+  }
+  const duration = match.groups.dur.trim();
+  if (duration === "" || !/^\d/.test(duration)) {
+    return null;
+  }
+  return parseDurationSeconds(duration, path, diagnostics);
 }
 
 function parseExerciseShorthand(
@@ -1360,15 +1908,15 @@ function parseExerciseShorthand(
   const splitIndex =
     colonIndex >= 0 && pipeIndex >= 0 ? Math.min(colonIndex, pipeIndex) : Math.max(colonIndex, pipeIndex);
 
-  const name = splitIndex >= 0 ? first.slice(0, splitIndex).trim() : first.trim();
+  const rawName = splitIndex >= 0 ? first.slice(0, splitIndex).trim() : first.trim();
   const firstRemainder = splitIndex >= 0 ? first.slice(splitIndex + 1).trim() : "";
-
-  if (name === "") {
+  if (rawName === "") {
     addError(diagnostics, path, "Exercise shorthand must start with an exercise name.");
     return undefined;
   }
 
-  let restSeconds: number | undefined;
+  const parsedName = parseWarmupGroupFromName(rawName);
+  let rest_seconds: number | undefined;
   const setLines: string[] = [];
 
   if (firstRemainder !== "") {
@@ -1376,20 +1924,16 @@ function parseExerciseShorthand(
   }
 
   meaningful.slice(1).forEach((line) => {
-    const trimmed = line.trim();
-
-    const restDirective = parseRestDirectiveSeconds(trimmed, `${path}.rest_seconds`, diagnostics);
+    const restDirective = parseRestDirectiveSeconds(line, `${path}.rest_seconds`, diagnostics);
     if (restDirective !== null) {
       if (restDirective !== undefined) {
-        restSeconds = restDirective;
+        rest_seconds = restDirective;
       }
       return;
     }
-
-    setLines.push(trimmed);
+    setLines.push(line);
   });
 
-  // Pull out inline "rest ..." segments that may appear at the end of a semicolon-separated list.
   const normalizedSetLines: string[] = [];
   setLines.forEach((line) => {
     line
@@ -1400,11 +1944,10 @@ function parseExerciseShorthand(
         const restDirective = parseRestDirectiveSeconds(segment, `${path}.rest_seconds`, diagnostics);
         if (restDirective !== null) {
           if (restDirective !== undefined) {
-            restSeconds = restDirective;
+            rest_seconds = restDirective;
           }
           return;
         }
-
         normalizedSetLines.push(segment);
       });
   });
@@ -1419,7 +1962,6 @@ function parseExerciseShorthand(
   }
 
   const sets = parseSetShorthandBlock(normalizedSetLines.join("\n"), `${path}.sets`, diagnostics);
-
   if (sets.length === 0) {
     addError(diagnostics, `${path}.sets`, "Exercise shorthand produced no sets.");
   }
@@ -1429,9 +1971,10 @@ function parseExerciseShorthand(
   }
 
   return {
-    exercise: name,
+    exercise: parsedName.exercise,
+    ...(parsedName.group_id ? { group_id: parsedName.group_id } : {}),
     sets,
-    rest_seconds: restSeconds
+    ...(rest_seconds !== undefined ? { rest_seconds } : {})
   };
 }
 
@@ -1440,20 +1983,15 @@ function parseExercisesShorthandBlock(
   path: string,
   diagnostics: Diagnostic[]
 ): ExercisePrescription[] | undefined {
-  const startIndex = diagnostics.length;
-
   const lines = source.split(/\r?\n/);
   const exercises: ExercisePrescription[] = [];
-
   let current: string[] = [];
 
   function flush(): void {
     if (current.length === 0) {
       return;
     }
-
-    const block = current.join("\n");
-    const parsed = parseExerciseShorthand(block, `${path}[${exercises.length}]`, diagnostics);
+    const parsed = parseExerciseShorthand(current.join("\n"), `${path}[${exercises.length}]`, diagnostics);
     if (parsed) {
       exercises.push(parsed);
     }
@@ -1465,10 +2003,8 @@ function parseExercisesShorthandBlock(
     if (trimmed === "" || trimmed.startsWith("#")) {
       return;
     }
-
     const content = trimmed.replace(/^\-\s+/, "");
-
-    const isSetLine = /^\d/.test(content);
+    const isSetLine = /^\d/.test(content) || /^(amrap|emom|density)\b/i.test(content);
     const isRestLine = isRestDirectiveLine(content);
     const isHeaderLine = !isSetLine && !isRestLine;
 
@@ -1491,23 +2027,24 @@ function parseExercisesShorthandBlock(
   });
 
   flush();
-
-  if (hasNewErrors(diagnostics, startIndex)) {
-    return undefined;
-  }
-
   return exercises;
 }
 
 function parseExercise(
   exercise: unknown,
   path: string,
-  diagnostics: Diagnostic[]
+  diagnostics: Diagnostic[],
+  aliasMap: Record<string, string>
 ): ExercisePrescription | undefined {
   const startIndex = diagnostics.length;
 
   if (typeof exercise === "string") {
-    return parseExerciseShorthand(exercise, path, diagnostics);
+    const parsed = parseExerciseShorthand(exercise, path, diagnostics);
+    if (!parsed) {
+      return undefined;
+    }
+    validateRoleReferences(parsed, path, diagnostics);
+    return parsed;
   }
 
   if (!isRecord(exercise)) {
@@ -1515,42 +2052,110 @@ function parseExercise(
     return undefined;
   }
 
-  const name = exercise.exercise;
-  if (typeof name !== "string" || name.trim() === "") {
+  const nameRaw = exercise.exercise;
+  if (typeof nameRaw !== "string" || nameRaw.trim() === "") {
     addError(diagnostics, `${path}.exercise`, "Exercise name is required.");
   }
+  const parsedName = typeof nameRaw === "string" ? parseWarmupGroupFromName(nameRaw) : { exercise: "" };
+
+  let exercise_id: string | undefined;
+  if (exercise.exercise_id !== undefined) {
+    if (typeof exercise.exercise_id !== "string" || exercise.exercise_id.trim() === "") {
+      addError(diagnostics, `${path}.exercise_id`, "exercise_id must be a non-empty string.");
+    } else {
+      exercise_id = exercise.exercise_id.trim();
+    }
+  } else if (parsedName.exercise) {
+    const aliasHit = aliasMap[normalizeAliasToken(parsedName.exercise)];
+    if (aliasHit) {
+      exercise_id = aliasHit;
+    }
+  }
+
+  const aliases = parseStringArray(exercise.aliases, `${path}.aliases`, diagnostics);
+  if (aliases && aliases.length > 0 && !exercise_id) {
+    addError(diagnostics, `${path}.exercise_id`, "aliases require exercise_id for stable identity.");
+  }
+
+  const family =
+    typeof exercise.family === "string" && exercise.family.trim() !== "" ? exercise.family.trim() : undefined;
+  if (exercise.family !== undefined && !family) {
+    addError(diagnostics, `${path}.family`, "family must be a non-empty string.");
+  }
+
+  const tags = parseStringArray(exercise.tags, `${path}.tags`, diagnostics);
+  const modifiers = parseInlineStringMap(exercise.modifiers, `${path}.modifiers`, diagnostics);
+  const substitutions = parseSubstitutions(exercise.substitutions, `${path}.substitutions`, diagnostics);
+  const constraints = parseConstraints(exercise.constraints, `${path}.constraints`, diagnostics);
+  const warmup = parseWarmup(exercise.warmup, `${path}.warmup`, diagnostics);
+
+  const group_id =
+    typeof exercise.group_id === "string" && exercise.group_id.trim() !== ""
+      ? exercise.group_id.trim().toUpperCase()
+      : parsedName.group_id;
 
   const hasRestSeconds = exercise.rest_seconds !== undefined;
   const hasRestAlias = exercise.rest !== undefined;
-
   if (hasRestSeconds && hasRestAlias) {
     addError(diagnostics, `${path}.rest_seconds`, "Specify either rest_seconds or rest, not both.");
     addError(diagnostics, `${path}.rest`, "Specify either rest_seconds or rest, not both.");
   }
-
-  const restValue = hasRestAlias ? exercise.rest : exercise.rest_seconds;
-  const restSeconds = parseDurationSeconds(
-    restValue,
+  const rest_seconds = parseDurationSeconds(
+    hasRestAlias ? exercise.rest : exercise.rest_seconds,
     hasRestAlias ? `${path}.rest` : `${path}.rest_seconds`,
     diagnostics
   );
+  const rest_before_seconds = parseDurationSeconds(
+    exercise.rest_before ?? exercise.rest_before_seconds,
+    exercise.rest_before !== undefined ? `${path}.rest_before` : `${path}.rest_before_seconds`,
+    diagnostics
+  );
+  const rest_after_seconds = parseDurationSeconds(
+    exercise.rest_after ?? exercise.rest_after_seconds,
+    exercise.rest_after !== undefined ? `${path}.rest_after` : `${path}.rest_after_seconds`,
+    diagnostics
+  );
+
+  const tempo = parseTempo(exercise.tempo, `${path}.tempo`, diagnostics);
+  const pause_seconds = parseDurationSeconds(exercise.pause_seconds, `${path}.pause_seconds`, diagnostics);
+  const eccentric_seconds = parseDurationSeconds(exercise.eccentric_seconds, `${path}.eccentric_seconds`, diagnostics);
+
+  const units = exercise.units !== undefined ? parseLoadUnit(exercise.units, `${path}.units`, diagnostics) : undefined;
+  const rounding = parseRoundingPolicy(exercise.rounding, `${path}.rounding`, diagnostics);
 
   const sets = parseSets(exercise.sets, `${path}.sets`, diagnostics);
-
   if (!sets || sets.length === 0) {
     addError(diagnostics, `${path}.sets`, "Exercise must include sets.");
+  }
+
+  if (hasNewErrors(diagnostics, startIndex) || !sets) {
     return undefined;
   }
 
-  if (hasNewErrors(diagnostics, startIndex)) {
-    return undefined;
-  }
-
-  return {
-    exercise: name as string,
+  const parsedExercise: ExercisePrescription = {
+    exercise: parsedName.exercise,
+    ...(exercise_id ? { exercise_id } : {}),
+    ...(aliases && aliases.length > 0 ? { aliases } : {}),
+    ...(family ? { family } : {}),
+    ...(tags && tags.length > 0 ? { tags } : {}),
+    ...(modifiers ? { modifiers } : {}),
+    ...(substitutions && substitutions.length > 0 ? { substitutions } : {}),
+    ...(constraints ? { constraints } : {}),
+    ...(warmup ? { warmup } : {}),
+    ...(group_id ? { group_id } : {}),
     sets,
-    rest_seconds: restSeconds
+    ...(rest_before_seconds !== undefined ? { rest_before_seconds } : {}),
+    ...(rest_after_seconds !== undefined ? { rest_after_seconds } : {}),
+    ...(rest_seconds !== undefined ? { rest_seconds } : {}),
+    ...(tempo ? { tempo } : {}),
+    ...(pause_seconds !== undefined ? { pause_seconds } : {}),
+    ...(eccentric_seconds !== undefined ? { eccentric_seconds } : {}),
+    ...(units ? { units } : {}),
+    ...(rounding ? { rounding } : {})
   };
+
+  validateRoleReferences(parsedExercise, path, diagnostics);
+  return parsedExercise;
 }
 
 function parseScheduleShorthand(
@@ -1564,35 +2169,30 @@ function parseScheduleShorthand(
     return undefined;
   }
 
-  let startOffset: number | undefined;
-
+  let start_offset_days: number | undefined;
   const plusOffsetMatch = /\+\s*(?<offset>\d+)\s*$/i.exec(raw);
   if (plusOffsetMatch?.groups?.offset !== undefined) {
-    startOffset = Number(plusOffsetMatch.groups.offset);
+    start_offset_days = Number(plusOffsetMatch.groups.offset);
     raw = raw.slice(0, plusOffsetMatch.index).trim();
   } else {
     const offsetMatch = /\boffset\s+(?<offset>\d+)\s*$/i.exec(raw);
     if (offsetMatch?.groups?.offset !== undefined) {
-      startOffset = Number(offsetMatch.groups.offset);
+      start_offset_days = Number(offsetMatch.groups.offset);
       raw = raw.slice(0, offsetMatch.index).trim();
     }
   }
 
-  if (startOffset !== undefined) {
-    if (!Number.isInteger(startOffset) || startOffset < 0) {
-      addError(diagnostics, path, "schedule start offset must be an integer >= 0.");
-      return undefined;
-    }
+  if (start_offset_days !== undefined && (!Number.isInteger(start_offset_days) || start_offset_days < 0)) {
+    addError(diagnostics, path, "schedule start offset must be an integer >= 0.");
+    return undefined;
   }
 
   const normalized = raw.replace(/\s+/g, " ").trim();
-
   if (/^every other day(s)?$/i.test(normalized)) {
-    return { type: "interval_days", every: 2, start_offset_days: startOffset };
+    return { type: "interval_days", every: 2, ...(start_offset_days !== undefined ? { start_offset_days } : {}) };
   }
-
   if (/^every day(s)?$/i.test(normalized)) {
-    return { type: "interval_days", every: 1, start_offset_days: startOffset };
+    return { type: "interval_days", every: 1, ...(start_offset_days !== undefined ? { start_offset_days } : {}) };
   }
 
   const intervalMatch = /^every\s+(?<every>\d+)\s*(?:d|day|days)$/i.exec(normalized);
@@ -1602,8 +2202,7 @@ function parseScheduleShorthand(
       addError(diagnostics, path, "schedule interval must be an integer >= 1.");
       return undefined;
     }
-
-    return { type: "interval_days", every, start_offset_days: startOffset };
+    return { type: "interval_days", every, ...(start_offset_days !== undefined ? { start_offset_days } : {}) };
   }
 
   const shortIntervalMatch = /^(?<every>\d+)\s*(?:d|day|days)$/i.exec(normalized);
@@ -1613,22 +2212,15 @@ function parseScheduleShorthand(
       addError(diagnostics, path, "schedule interval must be an integer >= 1.");
       return undefined;
     }
-
-    return { type: "interval_days", every, start_offset_days: startOffset };
+    return { type: "interval_days", every, ...(start_offset_days !== undefined ? { start_offset_days } : {}) };
   }
 
   const weekdaySource = normalized.replace(/^(?:on|every)\s+/i, "");
   const parsed = parseWeekdayList(weekdaySource);
-
   if (parsed.unknown.length > 0) {
-    addError(
-      diagnostics,
-      path,
-      `Invalid weekday(s) in schedule shorthand: ${parsed.unknown.join(", ")}.`
-    );
+    addError(diagnostics, path, `Invalid weekday(s) in schedule shorthand: ${parsed.unknown.join(", ")}.`);
     return undefined;
   }
-
   if (parsed.days.length === 0) {
     addError(
       diagnostics,
@@ -1637,8 +2229,7 @@ function parseScheduleShorthand(
     );
     return undefined;
   }
-
-  return { type: "weekdays", days: parsed.days, start_offset_days: startOffset };
+  return { type: "weekdays", days: parsed.days, ...(start_offset_days !== undefined ? { start_offset_days } : {}) };
 }
 
 function parseScheduleObject(
@@ -1647,81 +2238,63 @@ function parseScheduleObject(
   diagnostics: Diagnostic[]
 ): SessionSchedule | undefined {
   const startIndex = diagnostics.length;
-
-  const type = schedule.type;
-  if (type !== "interval_days" && type !== "weekdays") {
+  if (schedule.type !== "interval_days" && schedule.type !== "weekdays") {
     addError(diagnostics, `${path}.type`, "schedule.type must be interval_days or weekdays.");
     return undefined;
   }
 
-  const startOffset = schedule.start_offset_days;
-  if (startOffset !== undefined) {
-    if (typeof startOffset !== "number" || !Number.isInteger(startOffset) || startOffset < 0) {
-      addError(diagnostics, `${path}.start_offset_days`, "start_offset_days must be an integer >= 0.");
-    }
+  const start_offset_days = schedule.start_offset_days;
+  const end_offset_days = schedule.end_offset_days;
+  if (start_offset_days !== undefined && (typeof start_offset_days !== "number" || !Number.isInteger(start_offset_days) || start_offset_days < 0)) {
+    addError(diagnostics, `${path}.start_offset_days`, "start_offset_days must be an integer >= 0.");
   }
-
-  const endOffset = schedule.end_offset_days;
-  if (endOffset !== undefined) {
-    if (typeof endOffset !== "number" || !Number.isInteger(endOffset) || endOffset < 0) {
-      addError(diagnostics, `${path}.end_offset_days`, "end_offset_days must be an integer >= 0.");
-    }
+  if (end_offset_days !== undefined && (typeof end_offset_days !== "number" || !Number.isInteger(end_offset_days) || end_offset_days < 0)) {
+    addError(diagnostics, `${path}.end_offset_days`, "end_offset_days must be an integer >= 0.");
   }
-
   if (
-    startOffset !== undefined &&
-    endOffset !== undefined &&
-    typeof startOffset === "number" &&
-    typeof endOffset === "number" &&
-    endOffset < startOffset
+    typeof start_offset_days === "number" &&
+    typeof end_offset_days === "number" &&
+    end_offset_days < start_offset_days
   ) {
     addError(diagnostics, `${path}.end_offset_days`, "end_offset_days must be >= start_offset_days.");
   }
 
-  if (type === "interval_days") {
-    const every = schedule.every;
-    if (typeof every !== "number" || !Number.isInteger(every) || every < 1) {
+  if (schedule.type === "interval_days") {
+    if (typeof schedule.every !== "number" || !Number.isInteger(schedule.every) || schedule.every < 1) {
       addError(diagnostics, `${path}.every`, "every must be an integer >= 1.");
     }
-
     if (hasNewErrors(diagnostics, startIndex)) {
       return undefined;
     }
-
     return {
-      type,
-      every: every as number,
-      start_offset_days: startOffset as number | undefined,
-      end_offset_days: endOffset as number | undefined
+      type: "interval_days",
+      every: schedule.every as number,
+      ...(start_offset_days !== undefined ? { start_offset_days: start_offset_days as number } : {}),
+      ...(end_offset_days !== undefined ? { end_offset_days: end_offset_days as number } : {})
     };
   }
 
-  const daysRaw = schedule.days;
-  if (!Array.isArray(daysRaw) || daysRaw.length === 0) {
+  if (!Array.isArray(schedule.days) || schedule.days.length === 0) {
     addError(diagnostics, `${path}.days`, "days must be a non-empty array.");
     return undefined;
   }
-
   const days: Weekday[] = [];
-  daysRaw.forEach((dayValue, index) => {
-    const dayPath = `${path}.days[${index}]`;
-    if (typeof dayValue !== "string" || !WEEKDAY_SET.has(dayValue)) {
-      addError(diagnostics, dayPath, `Invalid weekday. Expected one of: ${WEEKDAYS.join(", ")}.`);
+  schedule.days.forEach((day, index) => {
+    if (typeof day !== "string" || !WEEKDAY_SET.has(day)) {
+      addError(diagnostics, `${path}.days[${index}]`, `Invalid weekday. Expected one of: ${WEEKDAYS.join(", ")}.`);
       return;
     }
-
-    days.push(dayValue as Weekday);
+    days.push(day as Weekday);
   });
 
   if (hasNewErrors(diagnostics, startIndex)) {
     return undefined;
   }
-
   return {
-    type,
+    type: "weekdays",
     days,
-    start_offset_days: startOffset as number | undefined,
-    end_offset_days: endOffset as number | undefined
+    ...(start_offset_days !== undefined ? { start_offset_days: start_offset_days as number } : {}),
+    ...(end_offset_days !== undefined ? { end_offset_days: end_offset_days as number } : {})
   };
 }
 
@@ -1733,20 +2306,258 @@ function parseSchedule(
   if (typeof schedule === "string") {
     return parseScheduleShorthand(schedule, path, diagnostics);
   }
-
   if (!isRecord(schedule)) {
     addError(diagnostics, path, "schedule must be an object or shorthand string.");
     return undefined;
   }
-
   return parseScheduleObject(schedule, path, diagnostics);
+}
+
+function parseSessionGroup(
+  group: unknown,
+  path: string,
+  diagnostics: Diagnostic[]
+): SessionGroup | undefined {
+  if (!isRecord(group)) {
+    addError(diagnostics, path, "group must be an object.");
+    return undefined;
+  }
+
+  if (typeof group.id !== "string" || group.id.trim() === "") {
+    addError(diagnostics, `${path}.id`, "group.id is required.");
+  }
+  if (group.type !== "superset" && group.type !== "circuit" && group.type !== "giant_set") {
+    addError(diagnostics, `${path}.type`, "group.type must be superset, circuit, or giant_set.");
+  }
+  if (group.rounds !== undefined && (typeof group.rounds !== "number" || !Number.isInteger(group.rounds) || group.rounds < 1)) {
+    addError(diagnostics, `${path}.rounds`, "rounds must be an integer >= 1.");
+  }
+
+  const exercise_ids = parseStringArray(group.exercise_ids, `${path}.exercise_ids`, diagnostics);
+  const rest_between_exercises_seconds = parseDurationSeconds(
+    group.rest_between_exercises ?? group.rest_between_exercises_seconds,
+    group.rest_between_exercises !== undefined
+      ? `${path}.rest_between_exercises`
+      : `${path}.rest_between_exercises_seconds`,
+    diagnostics
+  );
+  const rest_between_rounds_seconds = parseDurationSeconds(
+    group.rest_between_rounds ?? group.rest_between_rounds_seconds,
+    group.rest_between_rounds !== undefined ? `${path}.rest_between_rounds` : `${path}.rest_between_rounds_seconds`,
+    diagnostics
+  );
+
+  if (typeof group.id !== "string" || group.id.trim() === "" || (group.type !== "superset" && group.type !== "circuit" && group.type !== "giant_set")) {
+    return undefined;
+  }
+
+  return {
+    id: group.id.trim().toUpperCase(),
+    type: group.type,
+    ...(group.rounds !== undefined ? { rounds: group.rounds as number } : {}),
+    ...(exercise_ids && exercise_ids.length > 0 ? { exercise_ids } : {}),
+    ...(rest_between_exercises_seconds !== undefined ? { rest_between_exercises_seconds } : {}),
+    ...(rest_between_rounds_seconds !== undefined ? { rest_between_rounds_seconds } : {})
+  };
+}
+
+function parseSessionGroups(
+  groups: unknown,
+  path: string,
+  diagnostics: Diagnostic[]
+): SessionGroup[] | undefined {
+  if (groups === undefined) {
+    return undefined;
+  }
+  if (!Array.isArray(groups)) {
+    addError(diagnostics, path, "groups must be an array.");
+    return undefined;
+  }
+
+  const parsed: SessionGroup[] = [];
+  const seen = new Set<string>();
+  groups.forEach((group, index) => {
+    const current = parseSessionGroup(group, `${path}[${index}]`, diagnostics);
+    if (!current) {
+      return;
+    }
+    if (seen.has(current.id)) {
+      addError(diagnostics, `${path}[${index}].id`, `Duplicate group id: ${current.id}`);
+      return;
+    }
+    seen.add(current.id);
+    parsed.push(current);
+  });
+
+  return parsed;
+}
+
+function mergeModifiers(base: DeloadModifiers | undefined, override: DeloadModifiers | undefined): SessionModifiers | undefined {
+  if (!base && !override) {
+    return undefined;
+  }
+
+  const merged: SessionModifiers = {
+    ...(base ?? {}),
+    ...(override ?? {})
+  };
+
+  if (base?.intensity_cap || override?.intensity_cap) {
+    merged.intensity_cap = {
+      ...(base?.intensity_cap ?? {}),
+      ...(override?.intensity_cap ?? {})
+    };
+  }
+
+  if (base?.exercise_swap_map || override?.exercise_swap_map) {
+    merged.exercise_swap_map = {
+      ...(base?.exercise_swap_map ?? {}),
+      ...(override?.exercise_swap_map ?? {})
+    };
+  }
+
+  if (merged.deload) {
+    if (merged.volume_multiplier === undefined) {
+      merged.volume_multiplier = 0.6;
+    }
+    if (!merged.intensity_cap) {
+      merged.intensity_cap = { max_rpe: 7 };
+    } else if (merged.intensity_cap.max_rpe === undefined) {
+      merged.intensity_cap.max_rpe = 7;
+    }
+  }
+
+  return merged;
+}
+
+function parseModifierObject(
+  value: unknown,
+  path: string,
+  diagnostics: Diagnostic[]
+): DeloadModifiers | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (!isRecord(value)) {
+    addError(diagnostics, path, "modifiers must be an object.");
+    return undefined;
+  }
+
+  const result: DeloadModifiers = {};
+
+  if (value.deload !== undefined) {
+    if (typeof value.deload !== "boolean") {
+      addError(diagnostics, `${path}.deload`, "deload must be a boolean.");
+    } else {
+      result.deload = value.deload;
+    }
+  }
+
+  if (value.volume_multiplier !== undefined) {
+    if (
+      typeof value.volume_multiplier !== "number" ||
+      !Number.isFinite(value.volume_multiplier) ||
+      value.volume_multiplier <= 0
+    ) {
+      addError(diagnostics, `${path}.volume_multiplier`, "volume_multiplier must be a number > 0.");
+    } else {
+      result.volume_multiplier = value.volume_multiplier;
+    }
+  }
+
+  if (value.intensity_cap !== undefined) {
+    if (!isRecord(value.intensity_cap)) {
+      addError(diagnostics, `${path}.intensity_cap`, "intensity_cap must be an object.");
+    } else if (value.intensity_cap.max_rpe !== undefined) {
+      if (
+        typeof value.intensity_cap.max_rpe !== "number" ||
+        !Number.isFinite(value.intensity_cap.max_rpe) ||
+        value.intensity_cap.max_rpe < 1 ||
+        value.intensity_cap.max_rpe > 10
+      ) {
+        addError(diagnostics, `${path}.intensity_cap.max_rpe`, "max_rpe must be between 1 and 10.");
+      } else {
+        result.intensity_cap = { max_rpe: value.intensity_cap.max_rpe };
+      }
+    }
+  }
+
+  const exercise_swap_map = parseInlineStringMap(value.exercise_swap_map, `${path}.exercise_swap_map`, diagnostics);
+  if (exercise_swap_map) {
+    result.exercise_swap_map = exercise_swap_map;
+  }
+
+  if (result.deload) {
+    if (result.volume_multiplier === undefined) {
+      result.volume_multiplier = 0.6;
+    }
+    if (!result.intensity_cap) {
+      result.intensity_cap = { max_rpe: 7 };
+    } else if (result.intensity_cap.max_rpe === undefined) {
+      result.intensity_cap.max_rpe = 7;
+    }
+  }
+
+  return Object.keys(result).length > 0 ? result : undefined;
+}
+
+function parseSessionModifiers(
+  source: UnknownRecord,
+  path: string,
+  diagnostics: Diagnostic[]
+): SessionModifiers | undefined {
+  const objectModifiers = parseModifierObject(source.modifiers, `${path}.modifiers`, diagnostics);
+  const inlineModifiers = parseModifierObject(
+    {
+      deload: source.deload,
+      volume_multiplier: source.volume_multiplier,
+      intensity_cap: source.intensity_cap,
+      exercise_swap_map: source.exercise_swap_map
+    },
+    path,
+    diagnostics
+  );
+  return mergeModifiers(objectModifiers, inlineModifiers);
+}
+
+function parseSessionSlot(slot: unknown, path: string, diagnostics: Diagnostic[]): SessionSlot | undefined {
+  if (slot === undefined) {
+    return undefined;
+  }
+
+  if (typeof slot === "number") {
+    if (!Number.isInteger(slot) || slot < 1) {
+      addError(diagnostics, path, "slot numeric value must be an integer >= 1.");
+      return undefined;
+    }
+    return slot;
+  }
+
+  if (typeof slot === "string") {
+    const normalized = slot.trim().toUpperCase();
+    if (normalized === "AM" || normalized === "PM" || normalized === "EVE") {
+      return normalized as SessionSlot;
+    }
+    if (/^\d+$/.test(normalized)) {
+      const numeric = Number(normalized);
+      if (!Number.isInteger(numeric) || numeric < 1) {
+        addError(diagnostics, path, "slot numeric string must represent an integer >= 1.");
+        return undefined;
+      }
+      return numeric;
+    }
+  }
+
+  addError(diagnostics, path, "slot must be AM, PM, EVE, or an integer.");
+  return undefined;
 }
 
 function parseSession(
   session: unknown,
   path: string,
   seenIds: Set<string>,
-  diagnostics: Diagnostic[]
+  diagnostics: Diagnostic[],
+  aliasMap: Record<string, string>
 ): Session | undefined {
   const startIndex = diagnostics.length;
 
@@ -1755,67 +2566,106 @@ function parseSession(
     return undefined;
   }
 
-  const id = session.id;
-  if (typeof id !== "string" || id.trim() === "") {
+  if (typeof session.id !== "string" || session.id.trim() === "") {
     addError(diagnostics, `${path}.id`, "Session id is required.");
-  } else if (seenIds.has(id)) {
-    addError(diagnostics, `${path}.id`, `Duplicate session id: ${id}`);
+  } else if (seenIds.has(session.id.trim())) {
+    addError(diagnostics, `${path}.id`, `Duplicate session id: ${session.id.trim()}`);
   } else {
-    seenIds.add(id);
+    seenIds.add(session.id.trim());
   }
 
-  const name = session.name;
-  if (typeof name !== "string" || name.trim() === "") {
+  if (typeof session.name !== "string" || session.name.trim() === "") {
     addError(diagnostics, `${path}.name`, "Session name is required.");
   }
 
   const hasDay = session.day !== undefined;
   const hasSchedule = session.schedule !== undefined;
-
   if (hasDay && hasSchedule) {
     addError(diagnostics, `${path}.day`, "Specify either day or schedule, not both.");
     addError(diagnostics, `${path}.schedule`, "Specify either day or schedule, not both.");
   }
-
   if (!hasDay && !hasSchedule) {
     addError(diagnostics, path, "Session must specify either day or schedule.");
   }
 
-  const day = session.day;
-  if (hasDay) {
-    if (typeof day !== "number" || !Number.isInteger(day) || day < 1) {
-      addError(diagnostics, `${path}.day`, "Session day must be an integer >= 1.");
-    }
+  const day =
+    session.day === undefined
+      ? undefined
+      : typeof session.day === "number" && Number.isInteger(session.day) && session.day >= 1
+        ? session.day
+        : undefined;
+  if (hasDay && day === undefined) {
+    addError(diagnostics, `${path}.day`, "Session day must be an integer >= 1.");
   }
 
   const schedule = hasSchedule ? parseSchedule(session.schedule, `${path}.schedule`, diagnostics) : undefined;
+  const slot = parseSessionSlot(session.slot, `${path}.slot`, diagnostics);
 
-  const exercisesRaw = session.exercises;
+  const hasRestDefaultSeconds = session.rest_default_seconds !== undefined;
+  const hasRestDefaultAlias = session.rest_default !== undefined;
+  if (hasRestDefaultSeconds && hasRestDefaultAlias) {
+    addError(diagnostics, `${path}.rest_default_seconds`, "Specify either rest_default_seconds or rest_default, not both.");
+    addError(diagnostics, `${path}.rest_default`, "Specify either rest_default_seconds or rest_default, not both.");
+  }
+  const rest_default_seconds = parseDurationSeconds(
+    hasRestDefaultAlias ? session.rest_default : session.rest_default_seconds,
+    hasRestDefaultAlias ? `${path}.rest_default` : `${path}.rest_default_seconds`,
+    diagnostics
+  );
+
+  const groups = parseSessionGroups(session.groups, `${path}.groups`, diagnostics);
+  const constraints = parseConstraints(session.constraints, `${path}.constraints`, diagnostics);
+  const modifiers = parseSessionModifiers(session, path, diagnostics);
+
   const exercises: ExercisePrescription[] = [];
-
-  if (typeof exercisesRaw === "string") {
-    const parsed = parseExercisesShorthandBlock(exercisesRaw, `${path}.exercises`, diagnostics);
+  if (typeof session.exercises === "string") {
+    const parsed = parseExercisesShorthandBlock(session.exercises, `${path}.exercises`, diagnostics);
     if (!parsed || parsed.length === 0) {
       addError(diagnostics, `${path}.exercises`, "Session must include exercises.");
-      return undefined;
+    } else {
+      exercises.push(...parsed);
     }
-
-    exercises.push(...parsed);
-  } else if (Array.isArray(exercisesRaw)) {
-    if (exercisesRaw.length === 0) {
+  } else if (Array.isArray(session.exercises)) {
+    if (session.exercises.length === 0) {
       addError(diagnostics, `${path}.exercises`, "Session must include exercises.");
-      return undefined;
     }
-
-    exercisesRaw.forEach((exerciseValue, index) => {
-      const parsed = parseExercise(exerciseValue, `${path}.exercises[${index}]`, diagnostics);
+    session.exercises.forEach((entry, index) => {
+      const parsed = parseExercise(entry, `${path}.exercises[${index}]`, diagnostics, aliasMap);
       if (parsed) {
         exercises.push(parsed);
       }
     });
   } else {
-    addError(diagnostics, `${path}.exercises`, "Session exercises must be an array or a shorthand block string.");
-    return undefined;
+    addError(diagnostics, `${path}.exercises`, "Session exercises must be an array or shorthand block string.");
+  }
+
+  const explicitGroups = groups ? [...groups] : [];
+  const derivedGroups = new Map<string, SessionGroup>();
+  exercises.forEach((exercise) => {
+    if (!exercise.group_id) {
+      return;
+    }
+    const groupId = exercise.group_id.toUpperCase();
+    if (!derivedGroups.has(groupId)) {
+      derivedGroups.set(groupId, { id: groupId, type: "superset" });
+    }
+  });
+  const mergedGroups = explicitGroups.length > 0 ? explicitGroups : [...derivedGroups.values()];
+
+  if (mergedGroups.length > 0) {
+    const validIds = new Set(mergedGroups.map((group) => group.id.toUpperCase()));
+    exercises.forEach((exercise, index) => {
+      if (!exercise.group_id) {
+        return;
+      }
+      if (!validIds.has(exercise.group_id.toUpperCase())) {
+        addError(
+          diagnostics,
+          `${path}.exercises[${index}].group_id`,
+          `Unknown group_id "${exercise.group_id}".`
+        );
+      }
+    });
   }
 
   if (hasNewErrors(diagnostics, startIndex)) {
@@ -1823,22 +2673,17 @@ function parseSession(
   }
 
   return {
-    id: id as string,
-    name: name as string,
-    day: day as number | undefined,
-    schedule,
+    id: (session.id as string).trim(),
+    name: (session.name as string).trim(),
+    ...(day !== undefined ? { day } : {}),
+    ...(schedule ? { schedule } : {}),
+    ...(slot !== undefined ? { slot } : {}),
+    ...(rest_default_seconds !== undefined ? { rest_default_seconds } : {}),
+    ...(mergedGroups.length > 0 ? { groups: mergedGroups } : {}),
+    ...(constraints ? { constraints } : {}),
+    ...(modifiers ? { modifiers } : {}),
     exercises
   };
-}
-
-function formatIsoDateUtc(date: Date): string {
-  return date.toISOString().slice(0, 10);
-}
-
-function addDaysIsoDate(startDateIso: string, days: number): string {
-  const date = toUtcDate(startDateIso);
-  date.setUTCDate(date.getUTCDate() + days);
-  return formatIsoDateUtc(date);
 }
 
 function parseBlockDurationDays(duration: unknown, path: string, diagnostics: Diagnostic[]): number | undefined {
@@ -1874,23 +2719,57 @@ function parseBlockDurationDays(duration: unknown, path: string, diagnostics: Di
   }
 
   if (!isRecord(duration)) {
-    addError(diagnostics, path, 'Block duration must be a string (e.g. "4w") or an object.');
+    addError(diagnostics, path, 'Block duration must be a string (e.g. "4w") or object {type,value}.');
     return undefined;
   }
 
-  const type = duration.type;
-  if (type !== "weeks" && type !== "days") {
+  if (duration.type !== "weeks" && duration.type !== "days") {
     addError(diagnostics, `${path}.type`, "duration.type must be weeks or days.");
     return undefined;
   }
 
-  const valueRaw = duration.value;
-  if (typeof valueRaw !== "number" || !Number.isInteger(valueRaw) || valueRaw < 1) {
+  if (typeof duration.value !== "number" || !Number.isInteger(duration.value) || duration.value < 1) {
     addError(diagnostics, `${path}.value`, "duration.value must be an integer >= 1.");
     return undefined;
   }
 
-  return type === "weeks" ? valueRaw * 7 : valueRaw;
+  return duration.type === "weeks" ? duration.value * 7 : duration.value;
+}
+
+function parseCalendar(
+  calendar: unknown,
+  path: string,
+  diagnostics: Diagnostic[]
+): ProgramCalendar | undefined {
+  if (calendar === undefined) {
+    return undefined;
+  }
+  if (!isRecord(calendar)) {
+    addError(diagnostics, path, "Calendar must be an object.");
+    return undefined;
+  }
+
+  const start_date = parseIsoDate(calendar.start_date, `${path}.start_date`, diagnostics);
+  const end_date = calendar.end_date === undefined ? undefined : parseIsoDate(calendar.end_date, `${path}.end_date`, diagnostics);
+  const timezone = calendar.timezone;
+
+  if (timezone !== undefined && (typeof timezone !== "string" || timezone.trim() === "")) {
+    addError(diagnostics, `${path}.timezone`, "timezone must be a non-empty string.");
+  }
+
+  if (start_date && end_date && toUtcDate(end_date).getTime() < toUtcDate(start_date).getTime()) {
+    addError(diagnostics, `${path}.end_date`, "end_date must be on or after start_date.");
+  }
+
+  if (!start_date) {
+    return undefined;
+  }
+
+  return {
+    start_date,
+    ...(end_date ? { end_date } : {}),
+    ...(typeof timezone === "string" && timezone.trim() !== "" ? { timezone: timezone.trim() } : {})
+  };
 }
 
 function parseMetadata(
@@ -1898,43 +2777,81 @@ function parseMetadata(
   path: string,
   diagnostics: Diagnostic[]
 ): ProgramMetadata | undefined {
-  const startIndex = diagnostics.length;
-
   if (!isRecord(metadata)) {
     addError(diagnostics, path, "Metadata is required.");
     return undefined;
   }
 
-  const id = metadata.id;
-  if (typeof id !== "string" || id.trim() === "") {
-    addError(diagnostics, `${path}.id`, "Metadata id is required.");
+  if (typeof metadata.id !== "string" || metadata.id.trim() === "") {
+    addError(diagnostics, `${path}.id`, "metadata.id is required.");
+  }
+  if (typeof metadata.name !== "string" || metadata.name.trim() === "") {
+    addError(diagnostics, `${path}.name`, "metadata.name is required.");
+  }
+  if (metadata.description !== undefined && typeof metadata.description !== "string") {
+    addError(diagnostics, `${path}.description`, "description must be a string.");
+  }
+  if (metadata.author !== undefined && typeof metadata.author !== "string") {
+    addError(diagnostics, `${path}.author`, "author must be a string.");
   }
 
-  const name = metadata.name;
-  if (typeof name !== "string" || name.trim() === "") {
-    addError(diagnostics, `${path}.name`, "Metadata name is required.");
-  }
-
-  const description = metadata.description;
-  if (description !== undefined && typeof description !== "string") {
-    addError(diagnostics, `${path}.description`, "Metadata description must be a string.");
-  }
-
-  const author = metadata.author;
-  if (author !== undefined && typeof author !== "string") {
-    addError(diagnostics, `${path}.author`, "Metadata author must be a string.");
-  }
-
-  if (hasNewErrors(diagnostics, startIndex)) {
+  if (typeof metadata.id !== "string" || typeof metadata.name !== "string") {
     return undefined;
   }
 
   return {
-    id: id as string,
-    name: name as string,
-    description: description as string | undefined,
-    author: author as string | undefined
+    id: metadata.id.trim(),
+    name: metadata.name.trim(),
+    ...(typeof metadata.description === "string" ? { description: metadata.description } : {}),
+    ...(typeof metadata.author === "string" ? { author: metadata.author } : {})
   };
+}
+
+function parseExerciseAliasMap(
+  value: unknown,
+  path: string,
+  diagnostics: Diagnostic[]
+): Record<string, string> {
+  if (value === undefined) {
+    return {};
+  }
+  if (!isRecord(value)) {
+    addError(diagnostics, path, "exercise_aliases must be an object map.");
+    return {};
+  }
+
+  const result: Record<string, string> = {};
+  for (const [rawAlias, rawTarget] of Object.entries(value)) {
+    if (typeof rawTarget !== "string" || rawTarget.trim() === "") {
+      addError(diagnostics, `${path}.${rawAlias}`, "exercise_aliases values must be non-empty strings.");
+      continue;
+    }
+    const normalized = normalizeAliasToken(rawAlias);
+    if (result[normalized] && result[normalized] !== rawTarget.trim()) {
+      addError(diagnostics, `${path}.${rawAlias}`, "Alias is already mapped to a different exercise_id.");
+      continue;
+    }
+    result[normalized] = rawTarget.trim();
+  }
+
+  return result;
+}
+
+function parseProgramLevelModifiers(
+  source: UnknownRecord,
+  path: string,
+  diagnostics: Diagnostic[]
+): DeloadModifiers | undefined {
+  return parseModifierObject(
+    {
+      deload: source.deload,
+      volume_multiplier: source.volume_multiplier,
+      intensity_cap: source.intensity_cap,
+      exercise_swap_map: source.exercise_swap_map
+    },
+    path,
+    diagnostics
+  );
 }
 
 export function validateAst(ast: unknown): ValidationResult<ProgramAst> {
@@ -1946,21 +2863,22 @@ export function validateAst(ast: unknown): ValidationResult<ProgramAst> {
   }
 
   const startIndex = diagnostics.length;
-
-  const languageVersion = ast.language_version;
-  const validLanguage =
-    languageVersion === CURRENT_LANGUAGE_VERSION ? (languageVersion as LanguageVersion) : undefined;
-
+  const validLanguage = SUPPORTED_LANGUAGE_VERSIONS.includes(ast.language_version as LanguageVersion)
+    ? (ast.language_version as LanguageVersion)
+    : undefined;
   if (!validLanguage) {
     addError(
       diagnostics,
       "$.language_version",
-      `Unsupported language version. Expected ${CURRENT_LANGUAGE_VERSION}.`
+      `Unsupported language version. Expected one of: ${SUPPORTED_LANGUAGE_VERSIONS.join(", ")}.`
     );
   }
 
   const metadata = parseMetadata(ast.metadata, "$.metadata", diagnostics);
   const calendar = parseCalendar(ast.calendar, "$.calendar", diagnostics);
+  const units = ast.units !== undefined ? parseLoadUnit(ast.units, "$.units", diagnostics) : undefined;
+  const rounding = parseRoundingPolicy(ast.rounding, "$.rounding", diagnostics);
+  const exerciseAliasMap = parseExerciseAliasMap(ast.exercise_aliases, "$.exercise_aliases", diagnostics);
 
   const sessions: Session[] = [];
   let totalBlockDays: number | undefined;
@@ -1987,60 +2905,66 @@ export function validateAst(ast: unknown): ValidationResult<ProgramAst> {
           return;
         }
 
-        const blockIdRaw = blockValue.id;
-        let internalBlockId = `block_${blockIndex + 1}`;
-
-        if (typeof blockIdRaw !== "string" || blockIdRaw.trim() === "") {
+        let blockId = `block_${blockIndex + 1}`;
+        if (typeof blockValue.id !== "string" || blockValue.id.trim() === "") {
           addError(diagnostics, `${blockPath}.id`, "Block id is required.");
         } else {
-          const blockId = blockIdRaw.trim();
+          blockId = blockValue.id.trim();
           if (seenBlockIds.has(blockId)) {
             addError(diagnostics, `${blockPath}.id`, `Duplicate block id: ${blockId}`);
-            internalBlockId = `${blockId}__${blockIndex + 1}`;
+            blockId = `${blockId}__${blockIndex + 1}`;
           } else {
             seenBlockIds.add(blockId);
-            internalBlockId = blockId;
           }
         }
 
         const durationDays = parseBlockDurationDays(blockValue.duration, `${blockPath}.duration`, diagnostics);
         const blockStartOffset = offsetDays;
-
         if (durationDays !== undefined) {
           offsetDays += durationDays;
           totalDays += durationDays;
         }
 
-        const blockSessionsRaw = blockValue.sessions;
-        if (blockSessionsRaw !== undefined && !Array.isArray(blockSessionsRaw)) {
+        const blockModifiers = mergeModifiers(
+          parseModifierObject(blockValue.modifiers, `${blockPath}.modifiers`, diagnostics),
+          parseProgramLevelModifiers(blockValue, blockPath, diagnostics)
+        );
+
+        if (blockValue.sessions !== undefined && !Array.isArray(blockValue.sessions)) {
           addError(diagnostics, `${blockPath}.sessions`, "Block sessions must be an array.");
           return;
         }
 
-        const blockSessions = Array.isArray(blockSessionsRaw) ? blockSessionsRaw : [];
-
+        const blockSessions = Array.isArray(blockValue.sessions) ? blockValue.sessions : [];
         blockSessions.forEach((sessionValue, sessionIndex) => {
           const sessionPath = `${blockPath}.sessions[${sessionIndex}]`;
-
           let normalizedSessionValue: unknown = sessionValue;
           if (isRecord(sessionValue) && typeof sessionValue.id === "string" && sessionValue.id.trim() !== "") {
             normalizedSessionValue = {
               ...sessionValue,
-              id: `${internalBlockId}.${sessionValue.id}`
+              id: `${blockId}.${sessionValue.id}`
             };
           }
 
-          const parsed = parseSession(normalizedSessionValue, sessionPath, seenSessionIds, diagnostics);
+          const parsed = parseSession(
+            normalizedSessionValue,
+            sessionPath,
+            seenSessionIds,
+            diagnostics,
+            exerciseAliasMap
+          );
           if (!parsed) {
             return;
           }
+
+          parsed.block_id = blockId;
+          parsed.modifiers = mergeModifiers(blockModifiers, parsed.modifiers);
 
           if (durationDays !== undefined) {
             if (parsed.day !== undefined) {
               if (parsed.day > durationDays) {
                 addError(diagnostics, `${sessionPath}.day`, `Session day must be <= block duration (${durationDays} days).`);
               } else {
-                // Within blocks, `day` is relative to the block start (1-based).
                 parsed.day = blockStartOffset + parsed.day;
               }
             }
@@ -2080,9 +3004,14 @@ export function validateAst(ast: unknown): ValidationResult<ProgramAst> {
       addError(diagnostics, "$.sessions", "At least one session is required.");
     } else {
       const seenSessionIds = new Set<string>();
-
       ast.sessions.forEach((sessionValue, index) => {
-        const parsed = parseSession(sessionValue, `$.sessions[${index}]`, seenSessionIds, diagnostics);
+        const parsed = parseSession(
+          sessionValue,
+          `$.sessions[${index}]`,
+          seenSessionIds,
+          diagnostics,
+          exerciseAliasMap
+        );
         if (parsed) {
           sessions.push(parsed);
         }
@@ -2094,9 +3023,8 @@ export function validateAst(ast: unknown): ValidationResult<ProgramAst> {
     addError(diagnostics, hasBlocks ? "$.blocks" : "$.sessions", "At least one session is required.");
   }
 
-  if (totalBlockDays !== undefined && totalBlockDays > 0 && calendar) {
+  if (calendar && totalBlockDays !== undefined && totalBlockDays > 0) {
     const expectedEndDate = addDaysIsoDate(calendar.start_date, totalBlockDays - 1);
-
     if (calendar.end_date === undefined) {
       calendar.end_date = expectedEndDate;
     } else if (calendar.end_date !== expectedEndDate) {
@@ -2121,16 +3049,17 @@ export function validateAst(ast: unknown): ValidationResult<ProgramAst> {
     }
   }
 
-  const usesProgression = sessions.some((session) =>
-    session.exercises.some((exercise) => exercise.sets.some((set) => set.progression !== undefined))
+  const usesExecutableProgression = sessions.some((session) =>
+    session.exercises.some((exercise) =>
+      exercise.sets.some((set) => set.progression?.type === "increment" || set.progression?.type === "weekly_increment")
+    )
   );
-
-  if (usesProgression && !calendar) {
-    addError(diagnostics, "$.calendar", "calendar is required when using progression.");
+  if (usesExecutableProgression && !calendar) {
+    addError(diagnostics, "$.calendar", "calendar is required when using increment/weekly_increment progression.");
   }
 
   const valid = !hasNewErrors(diagnostics, startIndex);
-  if (!valid || !validLanguage || !metadata) {
+  if (!valid || !metadata || !validLanguage) {
     return { valid: false, diagnostics };
   }
 
@@ -2140,10 +3069,11 @@ export function validateAst(ast: unknown): ValidationResult<ProgramAst> {
     value: {
       language_version: validLanguage,
       metadata,
-      calendar,
+      ...(calendar ? { calendar } : {}),
+      ...(units ? { units } : {}),
+      ...(rounding ? { rounding } : {}),
+      ...(Object.keys(exerciseAliasMap).length > 0 ? { exercise_aliases: exerciseAliasMap } : {}),
       sessions
     }
   };
 }
-
-

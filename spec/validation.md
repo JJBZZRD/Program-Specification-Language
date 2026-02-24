@@ -1,150 +1,169 @@
-﻿# Semantic Validation Rules (v0.1)
+# Semantic Validation Rules (v0.2)
+
+PSL v0.2 is backward-compatible with v0.1 source documents and adds richer authoring semantics.
 
 ## Structural
 
-1. `language_version` must be `0.1`.
+1. `language_version` must be `0.1` or `0.2`.
 2. `metadata.id` and `metadata.name` are required and non-empty.
-3. Program must include at least one session.
-4. Each session must have at least one exercise.
-5. Each exercise must include at least one set prescription.
+3. Program must include exactly one of `sessions` or `blocks`.
+4. Every session must include at least one exercise.
+5. Every exercise must include at least one set prescription.
+6. Session ids must be unique after block expansion (`<block_id>.<session_id>`).
 
-## Source Shorthand and Normalization
+## Shorthand + Source Mapping
 
-PSL v0.1 accepts coach-friendly shorthand in the source YAML. Validation normalizes these into canonical AST objects before compilation/materialization.
+v0.2 keeps v0.1 shorthand and adds time and constraint clauses.
 
-Accepted shorthand input shapes:
+- New set shorthand families: `AMRAP`, `EMOM`, `density`, `for time`.
+- Tail clauses: `role`, `cap@`, `stop if ...`, `up to N sets until ...`, `rest_before`, `rest_after`.
+- Relative intensity shorthand:
+  - `@-12%` / `@+5%` (normalized as `percent_of_set` from role `top` by default)
+  - `@-10kg` / `@+5lb` (normalized as `load_delta_from_set` from role `top` by default)
+  - optional explicit role: `@-12% from top`.
+- Multiline shorthand diagnostics annotate line locations via `[line N]`.
 
-- Top-level: either `sessions` or `blocks` (mutually exclusive)
-- `session.schedule`: object or shorthand string (e.g. `every other day`, `MON,FRI`, `every 4 days +1`)
-- `session.exercises`: array of exercises OR a multi-exercise block string
-- Exercise entries: object OR exercise shorthand string (single-line or multiline block)
-- `exercise.sets`: array of sets OR a multiline sets block string
-- Set entries: structured set object, set shorthand string, or shorthand wrapper object (`{ shorthand: "...", ... }`)
-- `set.reps`: integer, `{min,max}`, or shorthand string (e.g. `"8-12"`)
-- `set.intensity`: object or shorthand string (e.g. `"75%"`, `"70%+5lb"`, `"@RPE8"`, `"150kg"`, `"[100,120]kg"`)
-- `exercise.rest_seconds` and `exercise.rest`: integer seconds or a duration string (e.g. `"90s"`, `"2m"`, `"2m30s"`, `"2:30"`)
-- `set.progression`: object or shorthand string (e.g. `"+2.5kg every 3 sessions on FRI if load>=target"`)
-- `block.duration`: string shorthand (e.g. `"4w"`, `"10d"`) or object `{type,value}`
+## Exercise Identity and Aliases
 
-Normalization notes:
+1. `exercise_id` must be a non-empty string when provided.
+2. Top-level `exercise_aliases` maps alias tokens to `exercise_id`.
+3. Per-exercise `aliases` require `exercise_id`.
+4. Alias collisions are errors.
 
-- Multiline set blocks are split on newlines; `;` can separate multiple set entries on one line.
-- In set blocks, trailing `# ...` is captured as a `set.note`.
-- Shorthand parsing failures are surfaced as validation diagnostics.
-- Blocks expand into regular sessions by namespacing session ids (`<block_id>.<session_id>`), shifting session timing relative to the block start, and bounding schedules with `schedule.end_offset_days`.
+## Sets, Work Types, and Time Modes
 
-## Reps and Sets
-
-1. `count` must be an integer >= 1.
-2. Reps as number: integer >= 1.
-3. Reps as range: `min >= 1`, `max >= min`.
-4. Reps shorthand strings must be either:
-   - `<reps>` (e.g. `"5"`), or
-   - `<min>-<max>` (e.g. `"8-12"`)
+1. `count` must be integer `>= 1`.
+2. `reps` must be integer `>=1`, valid range, or valid shorthand range string.
+3. `work_type` must be `reps` or `time` when provided.
+4. `time_mode` must be one of `amrap | emom | for_time | density`.
+5. `duration_seconds` is required for time work.
+6. `duration_seconds`, `interval_seconds`, and `target_total_reps` are invalid for rep work.
+7. `EMOM` requires `reps`; omitting `interval_seconds` emits a warning (defaults to 60s).
+8. `density` without `target_total_reps` emits a warning.
+9. `for_time` without `reps` or `target_total_reps` emits a warning.
 
 ## Intensity
 
-1. `percent_1rm` value: `0 < value <= 150`.
-   - Optional `plus_load`: a load delta applied on top of the computed `%1RM` load.
-     - Shape: `{ value: number, unit: "kg" | "lb" }`
-     - `value` may be positive or negative.
-2. `rpe` value: `1 <= value <= 10`.
-3. `rir` value: `0 <= value <= 6`.
-4. `load` value: `value > 0` and `unit` is `kg` or `lb`.
-5. `load_range` values: `min > 0`, `max >= min`, and `unit` is `kg` or `lb`.
-6. Intensity may be provided as an object or as a shorthand string; shorthand forms are defined in `spec/shorthand.ebnf`.
+Supported types:
+
+- `percent_1rm`
+- `rpe`
+- `rir`
+- `load`
+- `load_range`
+- `percent_of_set` (role reference)
+- `load_delta_from_set` (role reference)
+
+Rules:
+
+1. Numeric constraints are enforced (`rpe`, `rir`, positive loads, valid ranges).
+2. `percent_of_set` and `load_delta_from_set` require role references.
+3. Referenced roles must exist in prior sets within the same exercise.
+
+## Role and Warmup Semantics
+
+1. `set.role` is optional but, if provided, must be a non-empty token.
+2. `exercise.warmup` must be valid `percent_ramp` or `steps`.
+3. `warmup.based_on_role` must match at least one role in the exercise.
+
+## Rest Semantics
+
+1. `set.rest` and `set.rest_seconds` are mutually exclusive aliases.
+2. `exercise.rest` and `exercise.rest_seconds` are mutually exclusive aliases.
+3. `session.rest_default` and `session.rest_default_seconds` are mutually exclusive aliases.
+4. Canonical inheritance at compile time: `set.rest_seconds` → `exercise.rest_seconds` → `session.rest_default_seconds`.
+5. `rest_before` / `rest_after` map to `rest_before_seconds` / `rest_after_seconds`.
+
+## Constraints and Repeat
+
+Supported constraints:
+
+- `max_rpe`
+- `min_rir`
+- `max_sets`
+- `max_total_reps`
+- `stop_on_failure`
+- `velocity_loss_cap`
+
+Repeat:
+
+- `repeat.max_sets`
+- `repeat.until` using `rpe | rir | velocity_loss | failure`
+
+Rules:
+
+1. `repeat` requires at least one of `max_sets` or `until`.
+2. `repeat.max_sets` cannot exceed `constraints.max_sets`.
+3. `failure` condition supports only `==`/`!=` and boolean values.
+
+## Grouping and Session Loci
+
+1. `session.groups` supports `superset | circuit | giant_set`.
+2. Group ids must be unique per session.
+3. `exercise.group_id` must reference a known group; shorthand `A1/A2` style labels derive group ids.
+4. Unknown `group_id` values are errors.
+5. `session.slot` must be `AM | PM | EVE` or integer `>=1`.
 
 ## Progression
 
-Progression is optional and is defined per set prescription.
+### Executable progression (v0.2 runtime-compatible)
 
-### Types
+- `increment`
+- `weekly_increment`
 
-- `weekly_increment` (legacy alias)
-- `increment` (preferred)
+Rules:
 
-Both represent the same increment rule shape; `weekly_increment` defaults to a weekly cadence when `cadence` is omitted.
+1. Increment progression requires `intensity`.
+2. `increment` requires explicit `cadence`.
+3. `calendar` is required when executable progression is used.
+4. `progression.when` and `progression.criteria.condition` cannot both be defined.
+5. `scope` (if provided) must be `set | exercise | session`.
 
-### `increment` / `weekly_increment`
+### Declarative-only progression (v0.2 shape, v0.3 runtime)
 
-1. `progression.type` must be `weekly_increment` or `increment`.
-   - Progression may also be provided as a shorthand string; shorthand expands into an `increment` rule with an explicit cadence (default weekly).
-2. `progression` requires `intensity` (there must be a target to increment).
-3. `progression.by` must be:
-   - `percent_1rm` intensity:
-     - a number (percent points, e.g. `+2.5` means `+2.5%1RM`), or
-     - a load delta object `{ type: "load", value: number, unit: "kg" | "lb" }` (adjusts `intensity.plus_load`)
-   - `load` intensity:
-     - a number (same unit as the load target), or
-     - a load delta object `{ type: "load", value: number, unit: "kg" | "lb" }`
-   - `rpe` / `rir` intensity:
-     - a number (RPE/RIR points)
-   - `load_range` intensity:
-     - a number (shifts both `min` and `max`), or
-     - an object `{min,max}` (at least one of `min`/`max`) to shift bounds independently, or
-     - a load delta object `{ type: "load", value: number, unit: "kg" | "lb" }` (shifts both `min` and `max`)
-4. `progression.when` is optional:
-   - If omitted, it defaults to `session_success == true` when applying progression.
-   - `session_success` checks the session completion `success` boolean (default `true`).
-   - `metric_vs_target` compares achieved metrics from completion data to the current target:
-     - `metric`: `load` | `rpe` | `rir`
-     - `op`: one of `>=`, `>`, `<=`, `<`, `==`, `!=`
-     - `target`: `value` | `min` | `max` (for `load_range`, `target` must be `min` or `max`)
-5. `progression.cadence` controls how often increments can be earned/applied:
-   - `type: weeks` (weekly cadence)
-   - `type: sessions` (per-session cadence)
-   - optional `every` (integer >= 1) controls "every N weeks" or "every N sessions"
-   - for `sessions` cadence, optional `on_weekdays` can filter which session dates count (e.g., only Fridays)
-6. If `progression.type = increment`, `progression.cadence` is required.
-7. If any set uses `progression`, the program must include a `calendar` (so cadence can be applied over time).
+- `auto_adjust`
+- criteria aggregation: `all_sets | any_set | last_set | total_reps | avg_rpe | min_load`
+- actions: `repeat_week | reduce_load | reduce_volume | switch_variant`
 
-## Calendar and Scheduling
+Rules:
 
-### Program Calendar
+1. `auto_adjust.criteria` is required.
+2. `auto_adjust.actions` must be a non-empty array.
+3. Action payloads are validated for shape and basic numeric sanity.
 
-1. `calendar.start_date` must be an ISO date string `YYYY-MM-DD`.
-2. If provided, `calendar.end_date` must be an ISO date string `YYYY-MM-DD`.
-3. If both dates are provided, `end_date` must be on or after `start_date`.
+## Deload and Fatigue Modifiers
 
-### Session Timing
+Supported at block/session:
 
-1. A session must specify either `day` or `schedule` (but not both).
-2. `day` must be an integer >= 1 (relative to the program start).
-3. If any session uses `schedule`, the program must include `calendar`.
-4. If any session uses `schedule`, the program must include `calendar.end_date` unless all repeating schedules set `schedule.end_offset_days` (so repetition can be materialized into a finite list).
-5. `schedule` may be provided as a structured object or as a shorthand string; shorthand is parsed into one of the schedule types below.
+- `deload`
+- `volume_multiplier`
+- `intensity_cap.max_rpe`
+- `exercise_swap_map`
 
-### Schedule Types
+Rules:
 
-1. `schedule.type = interval_days` requires:
-   - `every`: integer >= 1
-   - optional `start_offset_days`: integer >= 0
-   - optional `end_offset_days`: integer >= 0
-2. `schedule.type = weekdays` requires:
-   - `days`: non-empty array of `MON|TUE|WED|THU|FRI|SAT|SUN`
-   - optional `start_offset_days`: integer >= 0
-   - optional `end_offset_days`: integer >= 0
+1. `deload: true` expands defaults:
+   - `volume_multiplier: 0.6`
+   - `intensity_cap.max_rpe: 7`
+2. Block-level modifiers merge into sessions; session modifiers override block values.
+3. Modifier values are validated for finite numeric ranges.
 
-### Training Blocks
+## Units and Rounding
 
-Blocks are an optional authoring feature for phased programs.
+1. `units` supports `kg | lb` at top-level and per exercise.
+2. `rounding` validates `round_to`, `mode`, and optional equipment increments.
+3. Schema/validation define representation only; numeric realization is consumer-driven.
 
-1. Program must specify exactly one of:
-   - `sessions` (top-level session templates), or
-   - `blocks` (sequential phases containing sessions)
-2. Each block must have:
-   - `id` (string, unique)
-   - `duration` (string shorthand like `"4w"` / `"10d"`, or object `{type,value}`)
-   - optional `sessions` (array; may be empty for a rest block)
-3. Blocks are contiguous: block N+1 starts immediately after block N ends.
-4. Normalization when using blocks:
-   - session ids are namespaced to `<block_id>.<session_id>`
-   - `day` and schedule offsets are interpreted relative to the block start and shifted into program-relative values
-   - repeating schedules are bounded using `schedule.end_offset_days` to the block window
-   - if a calendar is present, `calendar.end_date` is computed from `calendar.start_date` and the sum of block durations (and must match if explicitly provided)
+## Blocks and Scheduling
+
+1. Block durations support string shorthand (`4w`, `10d`) or `{type,value}`.
+2. Block sessions are expanded with id namespacing and offset-bounded schedules.
+3. If calendar is present with blocks, computed end-date must match explicit `calendar.end_date` when provided.
+4. Repeating schedules require bounded horizon via `calendar.end_date` or per-schedule `end_offset_days`.
 
 ## Diagnostics
 
-- Errors are blocking and must prevent compilation.
-- Warnings are non-blocking and indicate potentially unsafe assumptions.
-- Diagnostics should include a path, severity, and message.
+- Errors are blocking.
+- Warnings are non-blocking.
+- Each diagnostic includes `path`, `severity`, and `message`.
+- v0.2 improves shorthand error localization with line annotations for block parsing.

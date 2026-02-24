@@ -46,4 +46,4 @@ Notes:
 
 ## Status
 
-This repository provides a v0.1 specification and a working TypeScript reference implementation (parse/validate/compile/materialize), including scheduling, progression (`increment` / `weekly_increment`), `%1RM + load offset` targets (`plus_load`), training blocks (`blocks`), and expanded coach-friendly shorthand (see `examples/shorthand_demo.psl.yaml`).
+This repository provides a v0.2 specification (backward-compatible with v0.1) and a working TypeScript reference implementation (parse/validate/compile/materialize), including scheduling, progression (`increment` / `weekly_increment` plus declarative `auto_adjust` shape), `%1RM + load offset` targets (`plus_load`), role-referenced intensity (`percent_of_set`, `load_delta_from_set`), training blocks (`blocks`), grouping/rest semantics, time-based prescriptions, deload modifiers, and expanded coach-friendly shorthand (see `examples/shorthand_demo.psl.yaml` and `spec/versions/0.2.md`).

@@ -62,8 +62,13 @@ export async function runPrintCommand(args: string[]): Promise<number> {
     session.exercises.forEach((exercise) => {
       console.log(`  - ${exercise.exercise}`);
       exercise.sets.forEach((set) => {
-        const repText =
-          set.reps.min === set.reps.max ? `${set.reps.min}` : `${set.reps.min}-${set.reps.max}`;
+        const repText = set.reps
+          ? set.reps.min === set.reps.max
+            ? `${set.reps.min}`
+            : `${set.reps.min}-${set.reps.max}`
+          : set.work_type === "time"
+            ? `${set.time_mode ?? "time"} ${set.duration_seconds ?? ""}s`
+            : "-";
         let intensityText = "";
         const intensity = set.intensity;
         if (intensity) {
@@ -81,6 +86,10 @@ export async function runPrintCommand(args: string[]): Promise<number> {
             intensityText = ` @ RPE${intensity.value}`;
           } else if (intensity.type === "rir") {
             intensityText = ` @ RIR${intensity.value}`;
+          } else if (intensity.type === "percent_of_set") {
+            intensityText = ` @ ${intensity.value}% of ${intensity.role}`;
+          } else if (intensity.type === "load_delta_from_set") {
+            intensityText = ` @ ${intensity.value >= 0 ? "+" : ""}${intensity.value}${intensity.unit} from ${intensity.role}`;
           }
         }
         console.log(`    set ${set.index}: ${repText}${intensityText}`);

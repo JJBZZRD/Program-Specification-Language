@@ -36,19 +36,19 @@ Principles:
 
 ## Scope
 
-PSL currently focuses on:
+PSL v0.2 currently focuses on:
 
 - Program metadata and structure (phases, weeks, sessions)
-- Exercise prescriptions (sets, reps, intensity, rest)
-- Progression model representation (currently set-level increment rules with configurable cadence)
+- Exercise prescriptions (sets, reps/time, intensity, rest, grouping, constraints)
+- Progression model representation (increment runtime + richer declarative strategies)
 - Versioned schema evolution
 
-Out of scope for v0.1:
+Deferred beyond v0.2:
 
 - UI layout concerns
 - Workout logging schemas
 - Device integration
-- Athlete management workflows
+- Full runtime evaluation of declarative `auto_adjust`/repeat-until logic
 
 ## Architectural Model
 

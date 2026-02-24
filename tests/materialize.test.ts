@@ -75,4 +75,40 @@ export async function run(): Promise<void> {
     assert.equal(byId.get("b2.bench")?.date_iso, "2026-03-09");
     assert.equal(sessions2.length, 2);
   }
+
+  {
+    const validation3 = validateAst({
+      language_version: "0.2",
+      metadata: { id: "slot-order", name: "Slot Order" },
+      calendar: { start_date: "2026-03-02", end_date: "2026-03-02" },
+      sessions: [
+        {
+          id: "pm",
+          name: "PM",
+          schedule: "MON",
+          slot: "PM",
+          exercises: [{ exercise: "Bench Press", sets: ["1x1 @RPE8"] }]
+        },
+        {
+          id: "am",
+          name: "AM",
+          schedule: "MON",
+          slot: "AM",
+          exercises: [{ exercise: "Bench Press", sets: ["1x1 @RPE8"] }]
+        }
+      ]
+    });
+
+    assert.equal(validation3.valid, true);
+    assert.ok(validation3.value);
+
+    const compiled3 = compileProgram(validation3.value);
+    const sessions3 = materialize(compiled3);
+
+    assert.equal(sessions3.length, 2);
+    assert.equal(sessions3[0]?.id, "am");
+    assert.equal(sessions3[1]?.id, "pm");
+    assert.equal(sessions3[0]?.slot, "AM");
+    assert.equal(sessions3[1]?.slot, "PM");
+  }
 }

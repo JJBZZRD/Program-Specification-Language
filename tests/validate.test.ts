@@ -1230,4 +1230,152 @@ Row: 3x10 @RIR2
     assert.ok(result.value);
     assert.equal(result.value.sessions[0]?.exercises[0]?.sets[0]?.progression?.type, "increment");
   }
+
+  {
+    const result = validateAst({
+      language_version: "0.2",
+      metadata: {
+        id: "v0-2-valid",
+        name: "v0.2 Valid"
+      },
+      units: "kg",
+      exercise_aliases: {
+        "comp squat": "squat_comp"
+      },
+      calendar: {
+        start_date: "2026-03-02",
+        end_date: "2026-03-16"
+      },
+      sessions: [
+        {
+          id: "strength-am",
+          name: "Strength AM",
+          schedule: "MON",
+          slot: "AM",
+          rest_default: "2m",
+          exercises: [
+            {
+              exercise: "Competition Squat",
+              exercise_id: "squat_comp",
+              aliases: ["comp squat"],
+              warmup: {
+                type: "percent_ramp",
+                from_percent: 40,
+                to_percent: 85,
+                steps: 4,
+                reps: 3,
+                based_on_role: "top"
+              },
+              sets: [
+                "1x1 @RPE8 role top",
+                "3x3 @-12% backoff cap@9",
+                "EMOM 10m: 3 reps @70%"
+              ]
+            }
+          ]
+        }
+      ]
+    });
+
+    assert.equal(result.valid, true);
+    assert.ok(result.value);
+    assert.equal(result.value.language_version, "0.2");
+    assert.equal(result.value.sessions[0]?.slot, "AM");
+    assert.equal(result.value.sessions[0]?.rest_default_seconds, 120);
+    assert.equal(result.value.sessions[0]?.exercises[0]?.sets[1]?.intensity?.type, "percent_of_set");
+    assert.equal(result.value.sessions[0]?.exercises[0]?.sets[1]?.constraints?.max_rpe, 9);
+    assert.equal(result.value.sessions[0]?.exercises[0]?.sets[2]?.work_type, "time");
+    assert.equal(result.value.sessions[0]?.exercises[0]?.exercise_id, "squat_comp");
+  }
+
+  {
+    const result = validateAst({
+      language_version: "0.2",
+      metadata: {
+        id: "v0-2-invalid-role-ref",
+        name: "v0.2 Invalid Role Ref"
+      },
+      sessions: [
+        {
+          id: "s1",
+          name: "S1",
+          day: 1,
+          exercises: [
+            {
+              exercise: "Bench Press",
+              sets: ["3x3 @-10% backoff", "1x1 @RPE8 role top"]
+            }
+          ]
+        }
+      ]
+    });
+
+    assert.equal(result.valid, false);
+    assert.equal(result.diagnostics[0]?.path, "$.sessions[0].exercises[0].sets[0].intensity.role");
+  }
+
+  {
+    const result = validateAst({
+      language_version: "0.2",
+      metadata: {
+        id: "v0-2-invalid-work-ambiguity",
+        name: "v0.2 Invalid Work Ambiguity"
+      },
+      sessions: [
+        {
+          id: "s1",
+          name: "S1",
+          day: 1,
+          exercises: [
+            {
+              exercise: "Bike",
+              sets: [
+                {
+                  count: 3,
+                  reps: 10,
+                  work_type: "reps",
+                  duration_seconds: 60
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    });
+
+    assert.equal(result.valid, false);
+    assert.equal(result.diagnostics[0]?.path, "$.sessions[0].exercises[0].sets[0].duration_seconds");
+  }
+
+  {
+    const result = validateAst({
+      language_version: "0.2",
+      metadata: {
+        id: "v0-2-wrapper-rest",
+        name: "v0.2 Wrapper Rest"
+      },
+      sessions: [
+        {
+          id: "s1",
+          name: "S1",
+          day: 1,
+          exercises: [
+            {
+              exercise: "Bench Press",
+              sets: [
+                {
+                  shorthand: "1x5 @RPE8",
+                  rest_seconds: "2m"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    });
+
+    assert.equal(result.valid, true);
+    assert.ok(result.value);
+    assert.equal(result.value.sessions[0]?.exercises[0]?.sets[0]?.rest_seconds, 120);
+  }
 }

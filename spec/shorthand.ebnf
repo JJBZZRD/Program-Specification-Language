@@ -1,137 +1,137 @@
-(* PSL shorthand v0.1 *)
+(* PSL shorthand v0.2 *)
 
 (* -------------------------------------------------------------------------- *)
 (* Building Blocks                                                            *)
 (* -------------------------------------------------------------------------- *)
 
-integer         = digit, {digit} ;
-number          = integer, [".", integer] ;
-ws              = {" " | "\t"} ;
-nl              = "\n" | "\r\n" ;
-digit           = "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" ;
+integer           = digit, {digit} ;
+number            = integer, [".", integer] ;
+digit             = "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" ;
+ws                = {" " | "\t"} ;
+nl                = "\n" | "\r\n" ;
+unit              = "kg" | "KG" | "kgs" | "KGS" | "lb" | "LB" | "lbs" | "LBS" ;
+role              = "warmup" | "top" | "backoff" | "work" | "amrap" | "drop" | "cluster" | "giant" | "circuit" | identifier ;
+identifier        = letter, {letter | digit | "_" | "-"} ;
+letter            = "A".."Z" | "a".."z" ;
+weekday           = "MON" | "TUE" | "WED" | "THU" | "FRI" | "SAT" | "SUN" ;
+duration          = integer, ("s" | "m") | integer, ":", integer ;
 
 (* -------------------------------------------------------------------------- *)
 (* Set Shorthand                                                              *)
 (* -------------------------------------------------------------------------- *)
 
-(* Used anywhere a set prescription can be written as a string. *)
-set_shorthand   = set_block, [ws, intensity_clause] ;
-set_block       = integer, ws?, ("x" | "X"), ws?, reps ;
-reps            = integer | integer, ws?, "-", ws?, integer ;
+set_shorthand     = classic_set | amrap_set | emom_set | density_set | for_time_set ;
 
-intensity_clause= "@", ws?, intensity_expr ;
-intensity_expr  = percent | rpe | rir | load | load_range_bracket | load_range_hyphen ;
+classic_set       = integer, ws?, ("x" | "X"), ws?, reps, [ws, intensity_clause], [ws, tail_clause_list] ;
+reps              = integer | integer, ws?, "-", ws?, integer ;
 
-percent         = number, ws?, "%", [ws?, "1", ws?, ("RM" | "rm")], [ws?, percent_offset] ;
-percent_offset  = ("+" | "-"), ws?, number, ws?, unit ;
-rpe             = (("RPE" | "rpe"), ws?, number) | (number, ws?, ("RPE" | "rpe")) ;
-rir             = (("RIR" | "rir"), ws?, number) | (number, ws?, ("RIR" | "rir")) ;
+amrap_set         = ("AMRAP" | "amrap"), ws, duration, [ws, intensity_clause], [ws, amrap_cap], [ws, tail_clause_list] ;
+amrap_cap         = ("cap", [ws], integer) | ("cap", integer) ;
 
-load            = number, ws?, unit ;
-load_range_bracket = "[", ws?, number, ws?, ",", ws?, number, ws?, "]", ws?, unit ;
-load_range_hyphen  = number, ws?, "-", ws?, number, ws?, unit ;
+emom_set          = ("EMOM" | "emom"), ws, duration, ws?, ":", ws?, reps, ws, ("rep" | "reps"), [ws, intensity_clause], [ws, tail_clause_list] ;
 
-unit            = "kg" | "KG" | "kgs" | "KGS" | "lb" | "LB" | "lbs" | "LBS" ;
+density_set       = ("density" | "DENSITY"), ws, duration, ws, "target", ws, integer, ws, ("rep" | "reps"), [ws, intensity_clause], [ws, tail_clause_list] ;
+
+for_time_set      = ("for", ws, "time"), ws, duration, [ws, ("target", ws, integer, ws, ("rep" | "reps") | ":", ws?, integer, ws, ("rep" | "reps"))], [ws, intensity_clause], [ws, tail_clause_list] ;
+
+intensity_clause  = "@", ws?, intensity_expr ;
+intensity_expr    =
+    percent
+  | percent_relative
+  | percent_of_role
+  | load_delta_from_role
+  | rpe
+  | rir
+  | load
+  | load_range_bracket
+  | load_range_hyphen ;
+
+percent           = number, ws?, "%", [ws?, "1", ws?, ("RM" | "rm")], [ws?, percent_offset] ;
+percent_offset    = ("+" | "-"), ws?, number, ws?, unit ;
+
+percent_relative  = ("+" | "-"), ws?, number, ws?, "%", [ws, "from", ws, role] ;
+percent_of_role   = number, ws?, "%", ws, ("of" | "from"), ws, [("set", ws) | ("role", ws)], role ;
+load_delta_from_role = ("+" | "-"), ws?, number, ws?, unit, [ws, "from", ws, role] ;
+
+rpe               = (("RPE" | "rpe"), ws?, number) | (number, ws?, ("RPE" | "rpe")) ;
+rir               = (("RIR" | "rir"), ws?, number) | (number, ws?, ("RIR" | "rir")) ;
+load              = number, ws?, unit ;
+load_range_bracket= "[", ws?, number, ws?, ",", ws?, number, ws?, "]", ws?, unit ;
+load_range_hyphen = number, ws?, "-", ws?, number, ws?, unit ;
+
+tail_clause_list  = tail_clause, { ws?, ("," | ";"), ws?, tail_clause } ;
+tail_clause       = role_clause | cap_rpe_clause | stop_clause | repeat_clause | rest_clause | rest_before_clause | rest_after_clause ;
+role_clause       = [("role", ws)], role, [ws, ("set" | "sets")] ;
+cap_rpe_clause    = "cap@", number ;
+stop_clause       = "stop", ws, "if", ws, stop_condition ;
+repeat_clause     = "up", ws, "to", ws, integer, ws, ("set" | "sets"), [ws, "until", ws, stop_condition] ;
+stop_condition    = ("failure" | "fail") | (("rpe" | "rir" | "velocity" | "velocity_loss"), [ws], (">=" | ">" | "<=" | "<" | "==" | "!="), [ws], number) | (("rpe" | "rir"), [ws], number) ;
+rest_clause       = "rest", ws?, [":" | "="], ws?, duration ;
+rest_before_clause= ("rest_before" | "before"), ws?, [":" | "="], ws?, duration ;
+rest_after_clause = ("rest_after" | "after"), ws?, [":" | "="], ws?, duration ;
 
 (* -------------------------------------------------------------------------- *)
 (* Sets Block Shorthand                                                       *)
 (* -------------------------------------------------------------------------- *)
 
-(* Used when `exercise.sets` (or a set wrapper's `shorthand`) is a multiline string. *)
-sets_block      = set_line, { nl, set_line } ;
-set_line        = [ws], ["-", ws], set_shorthand, [ws, "#", ws, note] ;
-note            = { ? any character except newline ? } ;
+sets_block        = set_line, { nl, set_line } ;
+set_line          = [ws], ["-", ws], set_shorthand, [ws, "#", ws, note] ;
+note              = { ? any character except newline ? } ;
 
 (* -------------------------------------------------------------------------- *)
-(* Schedule Shorthand                                                         *)
+(* Exercise + Session-Level Shorthand                                         *)
 (* -------------------------------------------------------------------------- *)
 
-(* Used when `session.schedule` is a string. *)
-schedule_shorthand =
-  ( interval_schedule | weekday_schedule ),
-  [ws, schedule_offset] ;
-
-interval_schedule =
-  "every", ws,
-  ( "other", ws, "day"
-  | integer, ws?, ("d" | "day" | "days")
-  | "day" | "days"
-  ) ;
-
-weekday_schedule =
-  [("on" | "every"), ws],
-  weekday, { (ws | "," | "/"), weekday } ;
-
-schedule_offset  = ("+", ws?, integer) | ("offset", ws, integer) ;
-
-(* -------------------------------------------------------------------------- *)
-(* Exercise Shorthand                                                         *)
-(* -------------------------------------------------------------------------- *)
-
-(* Used when an exercise entry is written as a string. *)
 exercise_shorthand =
   exercise_name,
   ws?, (":" | "|"), ws?,
   exercise_sets_inline,
   [ws?, ";", ws?, rest_clause] ;
 
-exercise_sets_inline =
-  set_shorthand, { ws?, ";", ws?, set_shorthand } ;
+exercise_sets_inline = set_shorthand, { ws?, ";", ws?, set_shorthand } ;
+exercise_name        = { ? any character except newline ? } ;
 
-(* Multiline form (YAML block scalar) *)
-exercise_block =
-  exercise_header,
-  { nl, (set_line | rest_line) } ;
+exercise_block     = exercise_header, { nl, (set_line | rest_line) } ;
+exercise_header    = exercise_name, [ws?, (":" | "|"), ws?, exercise_sets_inline] ;
+rest_line          = rest_clause ;
 
-exercise_header =
-  exercise_name,
-  [ws?, (":" | "|"), ws?, exercise_sets_inline] ;
-
-rest_line       = rest_clause ;
-rest_clause     = ("rest" | "REST"), ws?, [":" | "="], ws?, duration ;
-
-duration        = integer, ("s" | "m") | integer, ":", integer ;
-exercise_name   = { ? any character except newline ? } ;
+schedule_shorthand = (interval_schedule | weekday_schedule), [ws, schedule_offset] ;
+interval_schedule  = "every", ws, ( "other", ws, "day" | integer, ws?, ("d" | "day" | "days") | "day" | "days" ) ;
+weekday_schedule   = [("on" | "every"), ws], weekday, { (ws | "," | "/"), weekday } ;
+schedule_offset    = ("+", ws?, integer) | ("offset", ws, integer) ;
 
 (* -------------------------------------------------------------------------- *)
 (* Progression Shorthand                                                      *)
 (* -------------------------------------------------------------------------- *)
 
-(* Used when `set.progression` is a string. *)
 progression_shorthand =
   inc_by,
   [ws, cadence],
   [ws, weekday_filter],
   [ws, condition] ;
 
-inc_by          = inc_number, [ws?, inc_unit] | inc_range, [ws?, unit] ;
-inc_number      = ["+" | "-"], number ;
-inc_range       = ["+" | "-"], "[", ws?, number, [ws?, ",", ws?, number], ws?, "]" ;
+inc_by             = inc_number, [ws?, inc_unit] | inc_range, [ws?, unit] ;
+inc_number         = ["+" | "-"], number ;
+inc_range          = ["+" | "-"], "[", ws?, number, [ws?, ",", ws?, number], ws?, "]" ;
+inc_unit           = unit | pct_unit | rpe_unit | rir_unit ;
+pct_unit           = "%", [ws?, "1", ws?, ("RM" | "rm")] ;
+rpe_unit           = "RPE" | "rpe" ;
+rir_unit           = "RIR" | "rir" ;
 
-inc_unit        = unit | pct_unit | rpe_unit | rir_unit ;
-pct_unit        = "%", [ws?, "1", ws?, ("RM" | "rm")] ;
-rpe_unit        = "RPE" | "rpe" ;
-rir_unit        = "RIR" | "rir" ;
-
-cadence         =
-  ( "weekly" )
+cadence            =
+    ( "weekly" )
   | ( "/", [integer], ("w" | "s") )
   | ( "every", ws, ("other" | integer), ws, ("week" | "weeks" | "w" | "session" | "sessions" | "s") ) ;
 
-weekday_filter  = ("on" | "only"), ws, weekday, { (ws | "," | "/"), weekday } ;
-
-condition       = "if", ws, ( "success" | "fail" | metric_condition ) ;
-metric_condition= [metric, ws], op, ws?, target_ref ;
-metric          = "load" | "rpe" | "rir" ;
-op              = ">=" | ">" | "<=" | "<" | "==" | "!=" ;
-target_ref      = "target" | "value" | "min" | "max" ;
-
-(* NOTE: weekday tokens may be written as MON/MONDAY/etc, but normalize to MON..SUN in the AST. *)
-weekday         = "MON" | "TUE" | "WED" | "THU" | "FRI" | "SAT" | "SUN" ;
+weekday_filter     = ("on" | "only"), ws, weekday, { (ws | "," | "/"), weekday } ;
+condition          = "if", ws, ( "success" | "fail" | metric_condition ) ;
+metric_condition   = [metric, ws], op, ws?, target_ref ;
+metric             = "load" | "rpe" | "rir" ;
+op                 = ">=" | ">" | "<=" | "<" | "==" | "!=" ;
+target_ref         = "target" | "value" | "min" | "max" ;
 
 (* -------------------------------------------------------------------------- *)
 (* Block Duration Shorthand                                                   *)
 (* -------------------------------------------------------------------------- *)
 
-(* Used when `block.duration` is written as a string. *)
-block_duration  = integer, ws?, ("w" | "week" | "weeks" | "d" | "day" | "days") ;
+block_duration     = integer, ws?, ("w" | "week" | "weeks" | "d" | "day" | "days") ;
