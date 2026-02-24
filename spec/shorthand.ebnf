@@ -128,3 +128,10 @@ target_ref      = "target" | "value" | "min" | "max" ;
 
 (* NOTE: weekday tokens may be written as MON/MONDAY/etc, but normalize to MON..SUN in the AST. *)
 weekday         = "MON" | "TUE" | "WED" | "THU" | "FRI" | "SAT" | "SUN" ;
+
+(* -------------------------------------------------------------------------- *)
+(* Block Duration Shorthand                                                   *)
+(* -------------------------------------------------------------------------- *)
+
+(* Used when `block.duration` is written as a string. *)
+block_duration  = integer, ws?, ("w" | "week" | "weeks" | "d" | "day" | "days") ;

@@ -5,11 +5,13 @@ import { compileProgram, parseDocument, validateAst } from "../../../src/index.j
 function formatSchedule(schedule: SessionSchedule): string {
   if (schedule.type === "interval_days") {
     const offset = schedule.start_offset_days ?? 0;
-    return `every ${schedule.every} day(s) (offset ${offset})`;
+    const end = schedule.end_offset_days !== undefined ? `, end_offset ${schedule.end_offset_days}` : "";
+    return `every ${schedule.every} day(s) (offset ${offset}${end})`;
   }
 
   const offset = schedule.start_offset_days ?? 0;
-  return `on ${schedule.days.join(", ")} (offset ${offset})`;
+  const end = schedule.end_offset_days !== undefined ? `, end_offset ${schedule.end_offset_days}` : "";
+  return `on ${schedule.days.join(", ")} (offset ${offset}${end})`;
 }
 
 export async function runPrintCommand(args: string[]): Promise<number> {

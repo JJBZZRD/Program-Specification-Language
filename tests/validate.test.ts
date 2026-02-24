@@ -820,6 +820,89 @@ Row: 3x10 @RIR2
     const result = validateAst({
       language_version: "0.1",
       metadata: {
+        id: "schedule-bounded-no-end",
+        name: "Schedule Bounded No End"
+      },
+      calendar: {
+        start_date: "2026-03-02"
+      },
+      sessions: [
+        {
+          id: "every-other-day",
+          name: "Every Other Day",
+          schedule: {
+            type: "interval_days",
+            every: 2,
+            end_offset_days: 6
+          },
+          exercises: [
+            {
+              exercise: "Back Squat",
+              sets: ["3x5 @75%"]
+            }
+          ]
+        }
+      ]
+    });
+
+    assert.equal(result.valid, true);
+    assert.ok(result.value);
+  }
+
+  {
+    const result = validateAst({
+      language_version: "0.1",
+      metadata: {
+        id: "blocks-basic",
+        name: "Blocks Basic"
+      },
+      calendar: {
+        start_date: "2026-03-02"
+      },
+      blocks: [
+        {
+          id: "b1",
+          duration: "7d",
+          sessions: [
+            {
+              id: "bench",
+              name: "Bench",
+              schedule: "MON",
+              exercises: [{ exercise: "Barbell Bench Press", sets: ["1x1 @RPE8"] }]
+            }
+          ]
+        },
+        {
+          id: "b2",
+          duration: { type: "weeks", value: 1 },
+          sessions: [
+            {
+              id: "bench",
+              name: "Bench",
+              schedule: "MON",
+              exercises: [{ exercise: "Barbell Bench Press", sets: ["1x1 @RPE8"] }]
+            }
+          ]
+        }
+      ]
+    });
+
+    assert.equal(result.valid, true);
+    assert.ok(result.value);
+    assert.equal(result.value.calendar?.end_date, "2026-03-15");
+    assert.equal(result.value.sessions.length, 2);
+    assert.equal(result.value.sessions[0]?.id, "b1.bench");
+    assert.equal(result.value.sessions[1]?.id, "b2.bench");
+    assert.equal(result.value.sessions[0]?.schedule?.start_offset_days, 0);
+    assert.equal(result.value.sessions[0]?.schedule?.end_offset_days, 6);
+    assert.equal(result.value.sessions[1]?.schedule?.start_offset_days, 7);
+    assert.equal(result.value.sessions[1]?.schedule?.end_offset_days, 13);
+  }
+
+  {
+    const result = validateAst({
+      language_version: "0.1",
+      metadata: {
         id: "day-and-schedule",
         name: "Day And Schedule"
       },

@@ -14,12 +14,14 @@ export interface IntervalDaysSchedule {
   type: "interval_days";
   every: number;
   start_offset_days?: number;
+  end_offset_days?: number;
 }
 
 export interface WeekdaysSchedule {
   type: "weekdays";
   days: Weekday[];
   start_offset_days?: number;
+  end_offset_days?: number;
 }
 
 export type SessionSchedule = IntervalDaysSchedule | WeekdaysSchedule;

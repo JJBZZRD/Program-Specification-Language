@@ -6,6 +6,7 @@ import { run as runParse } from "./parse.test.js";
 import { run as runProgression } from "./progression.test.js";
 import { run as runShorthand } from "./shorthand.test.js";
 import { run as runValidate } from "./validate.test.js";
+import { run as runExport } from "./export.test.js";
 
 type TestFn = () => void | Promise<void>;
 
@@ -17,7 +18,8 @@ const tests: Array<{ name: string; fn: TestFn }> = [
   { name: "examples", fn: runExamples },
   { name: "progression", fn: runProgression },
   { name: "cadence", fn: runCadence },
-  { name: "materialize", fn: runMaterialize }
+  { name: "materialize", fn: runMaterialize },
+  { name: "export", fn: runExport }
 ];
 
 let failed = 0;

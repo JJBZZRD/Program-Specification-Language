@@ -9,6 +9,7 @@
 - Provide examples and invalid fixtures
 - Add calendar scheduling and recurrence (dates, `interval_days`, `weekdays`)
 - Add materialization to dated session instances (basic)
+- Add optional training blocks (phases) with durations (weeks/days) that expand into bounded schedules
 - Add absolute load targets and load selection windows (`load`, `load_range`)
 - Add progression rules (`increment` / `weekly_increment`) driven by completion results, with configurable cadence (weeks vs sessions)
 

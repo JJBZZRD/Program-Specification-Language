@@ -97,14 +97,16 @@ function cloneSchedule(session: CompiledSession): CompiledSession["schedule"] {
     return {
       type: "interval_days",
       every: schedule.every,
-      start_offset_days: schedule.start_offset_days
+      start_offset_days: schedule.start_offset_days,
+      end_offset_days: schedule.end_offset_days
     };
   }
 
   return {
     type: "weekdays",
     days: [...schedule.days],
-    start_offset_days: schedule.start_offset_days
+    start_offset_days: schedule.start_offset_days,
+    end_offset_days: schedule.end_offset_days
   };
 }
 
@@ -680,17 +682,28 @@ export function materialize(program: CompiledProgram, options: MaterializeOption
       return;
     }
 
-    if (!endDate) {
-      throw new Error("calendar.end_date is required to materialize repeating session schedules.");
+    const offset = session.schedule.start_offset_days ?? 0;
+    const scheduleEndOffset = session.schedule.end_offset_days;
+
+    let effectiveEndDate = endDate;
+    if (scheduleEndOffset !== undefined) {
+      const bounded = addDays(startDate, scheduleEndOffset);
+      if (!effectiveEndDate || bounded.getTime() < effectiveEndDate.getTime()) {
+        effectiveEndDate = bounded;
+      }
     }
 
-    const offset = session.schedule.start_offset_days ?? 0;
+    if (!effectiveEndDate) {
+      throw new Error(
+        "calendar.end_date is required to materialize repeating session schedules unless each schedule sets end_offset_days."
+      );
+    }
 
     if (session.schedule.type === "interval_days") {
       let date = addDays(startDate, offset);
       let occurrence = 1;
 
-      while (date.getTime() <= endDate.getTime()) {
+      while (date.getTime() <= effectiveEndDate.getTime()) {
         occurrences.push({
           ...cloneSession(session),
           day: diffDays(startDate, date) + 1,
@@ -709,7 +722,7 @@ export function materialize(program: CompiledProgram, options: MaterializeOption
     let date = addDays(startDate, offset);
     let occurrence = 1;
 
-    while (date.getTime() <= endDate.getTime()) {
+    while (date.getTime() <= effectiveEndDate.getTime()) {
       if (allowed.has(getWeekdayUtc(date))) {
         occurrences.push({
           ...cloneSession(session),

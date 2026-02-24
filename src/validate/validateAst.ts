@@ -1661,6 +1661,23 @@ function parseScheduleObject(
     }
   }
 
+  const endOffset = schedule.end_offset_days;
+  if (endOffset !== undefined) {
+    if (typeof endOffset !== "number" || !Number.isInteger(endOffset) || endOffset < 0) {
+      addError(diagnostics, `${path}.end_offset_days`, "end_offset_days must be an integer >= 0.");
+    }
+  }
+
+  if (
+    startOffset !== undefined &&
+    endOffset !== undefined &&
+    typeof startOffset === "number" &&
+    typeof endOffset === "number" &&
+    endOffset < startOffset
+  ) {
+    addError(diagnostics, `${path}.end_offset_days`, "end_offset_days must be >= start_offset_days.");
+  }
+
   if (type === "interval_days") {
     const every = schedule.every;
     if (typeof every !== "number" || !Number.isInteger(every) || every < 1) {
@@ -1674,7 +1691,8 @@ function parseScheduleObject(
     return {
       type,
       every: every as number,
-      start_offset_days: startOffset as number | undefined
+      start_offset_days: startOffset as number | undefined,
+      end_offset_days: endOffset as number | undefined
     };
   }
 
@@ -1702,7 +1720,8 @@ function parseScheduleObject(
   return {
     type,
     days,
-    start_offset_days: startOffset as number | undefined
+    start_offset_days: startOffset as number | undefined,
+    end_offset_days: endOffset as number | undefined
   };
 }
 
@@ -1812,6 +1831,68 @@ function parseSession(
   };
 }
 
+function formatIsoDateUtc(date: Date): string {
+  return date.toISOString().slice(0, 10);
+}
+
+function addDaysIsoDate(startDateIso: string, days: number): string {
+  const date = toUtcDate(startDateIso);
+  date.setUTCDate(date.getUTCDate() + days);
+  return formatIsoDateUtc(date);
+}
+
+function parseBlockDurationDays(duration: unknown, path: string, diagnostics: Diagnostic[]): number | undefined {
+  if (typeof duration === "string") {
+    const normalized = duration.trim().toLowerCase();
+    if (normalized === "") {
+      addError(diagnostics, path, "Block duration cannot be empty.");
+      return undefined;
+    }
+
+    const weeksMatch = normalized.match(/^(?<value>\d+)\s*(?:w|week|weeks)$/);
+    if (weeksMatch?.groups?.value !== undefined) {
+      const weeks = Number(weeksMatch.groups.value);
+      if (!Number.isInteger(weeks) || weeks < 1) {
+        addError(diagnostics, path, "Block duration weeks must be an integer >= 1.");
+        return undefined;
+      }
+      return weeks * 7;
+    }
+
+    const daysMatch = normalized.match(/^(?<value>\d+)\s*(?:d|day|days)$/);
+    if (daysMatch?.groups?.value !== undefined) {
+      const days = Number(daysMatch.groups.value);
+      if (!Number.isInteger(days) || days < 1) {
+        addError(diagnostics, path, "Block duration days must be an integer >= 1.");
+        return undefined;
+      }
+      return days;
+    }
+
+    addError(diagnostics, path, 'Invalid block duration. Use e.g. "4w" or "10d".');
+    return undefined;
+  }
+
+  if (!isRecord(duration)) {
+    addError(diagnostics, path, 'Block duration must be a string (e.g. "4w") or an object.');
+    return undefined;
+  }
+
+  const type = duration.type;
+  if (type !== "weeks" && type !== "days") {
+    addError(diagnostics, `${path}.type`, "duration.type must be weeks or days.");
+    return undefined;
+  }
+
+  const valueRaw = duration.value;
+  if (typeof valueRaw !== "number" || !Number.isInteger(valueRaw) || valueRaw < 1) {
+    addError(diagnostics, `${path}.value`, "duration.value must be an integer >= 1.");
+    return undefined;
+  }
+
+  return type === "weeks" ? valueRaw * 7 : valueRaw;
+}
+
 function parseMetadata(
   metadata: unknown,
   path: string,
@@ -1881,30 +1962,161 @@ export function validateAst(ast: unknown): ValidationResult<ProgramAst> {
   const metadata = parseMetadata(ast.metadata, "$.metadata", diagnostics);
   const calendar = parseCalendar(ast.calendar, "$.calendar", diagnostics);
 
-  if (!Array.isArray(ast.sessions) || ast.sessions.length === 0) {
-    addError(diagnostics, "$.sessions", "At least one session is required.");
-    return { valid: false, diagnostics };
+  const sessions: Session[] = [];
+  let totalBlockDays: number | undefined;
+
+  const hasSessions = ast.sessions !== undefined;
+  const hasBlocks = ast.blocks !== undefined;
+
+  if (hasSessions && hasBlocks) {
+    addError(diagnostics, "$.sessions", "Specify either sessions or blocks, not both.");
+    addError(diagnostics, "$.blocks", "Specify either blocks or sessions, not both.");
+  } else if (hasBlocks) {
+    if (!Array.isArray(ast.blocks) || ast.blocks.length === 0) {
+      addError(diagnostics, "$.blocks", "At least one block is required.");
+    } else {
+      const seenSessionIds = new Set<string>();
+      const seenBlockIds = new Set<string>();
+      let offsetDays = 0;
+      let totalDays = 0;
+
+      ast.blocks.forEach((blockValue, blockIndex) => {
+        const blockPath = `$.blocks[${blockIndex}]`;
+        if (!isRecord(blockValue)) {
+          addError(diagnostics, blockPath, "Block must be an object.");
+          return;
+        }
+
+        const blockIdRaw = blockValue.id;
+        let internalBlockId = `block_${blockIndex + 1}`;
+
+        if (typeof blockIdRaw !== "string" || blockIdRaw.trim() === "") {
+          addError(diagnostics, `${blockPath}.id`, "Block id is required.");
+        } else {
+          const blockId = blockIdRaw.trim();
+          if (seenBlockIds.has(blockId)) {
+            addError(diagnostics, `${blockPath}.id`, `Duplicate block id: ${blockId}`);
+            internalBlockId = `${blockId}__${blockIndex + 1}`;
+          } else {
+            seenBlockIds.add(blockId);
+            internalBlockId = blockId;
+          }
+        }
+
+        const durationDays = parseBlockDurationDays(blockValue.duration, `${blockPath}.duration`, diagnostics);
+        const blockStartOffset = offsetDays;
+
+        if (durationDays !== undefined) {
+          offsetDays += durationDays;
+          totalDays += durationDays;
+        }
+
+        const blockSessionsRaw = blockValue.sessions;
+        if (blockSessionsRaw !== undefined && !Array.isArray(blockSessionsRaw)) {
+          addError(diagnostics, `${blockPath}.sessions`, "Block sessions must be an array.");
+          return;
+        }
+
+        const blockSessions = Array.isArray(blockSessionsRaw) ? blockSessionsRaw : [];
+
+        blockSessions.forEach((sessionValue, sessionIndex) => {
+          const sessionPath = `${blockPath}.sessions[${sessionIndex}]`;
+
+          let normalizedSessionValue: unknown = sessionValue;
+          if (isRecord(sessionValue) && typeof sessionValue.id === "string" && sessionValue.id.trim() !== "") {
+            normalizedSessionValue = {
+              ...sessionValue,
+              id: `${internalBlockId}.${sessionValue.id}`
+            };
+          }
+
+          const parsed = parseSession(normalizedSessionValue, sessionPath, seenSessionIds, diagnostics);
+          if (!parsed) {
+            return;
+          }
+
+          if (durationDays !== undefined) {
+            if (parsed.day !== undefined) {
+              if (parsed.day > durationDays) {
+                addError(diagnostics, `${sessionPath}.day`, `Session day must be <= block duration (${durationDays} days).`);
+              } else {
+                // Within blocks, `day` is relative to the block start (1-based).
+                parsed.day = blockStartOffset + parsed.day;
+              }
+            }
+
+            if (parsed.schedule) {
+              const startWithinBlock = parsed.schedule.start_offset_days ?? 0;
+              if (startWithinBlock >= durationDays) {
+                addError(
+                  diagnostics,
+                  `${sessionPath}.schedule.start_offset_days`,
+                  `start_offset_days must be < block duration (${durationDays} days).`
+                );
+              }
+
+              const endWithinBlock = parsed.schedule.end_offset_days ?? durationDays - 1;
+              if (endWithinBlock >= durationDays) {
+                addError(
+                  diagnostics,
+                  `${sessionPath}.schedule.end_offset_days`,
+                  `end_offset_days must be < block duration (${durationDays} days).`
+                );
+              }
+
+              parsed.schedule.start_offset_days = blockStartOffset + startWithinBlock;
+              parsed.schedule.end_offset_days = blockStartOffset + endWithinBlock;
+            }
+          }
+
+          sessions.push(parsed);
+        });
+      });
+
+      totalBlockDays = totalDays;
+    }
+  } else {
+    if (!Array.isArray(ast.sessions) || ast.sessions.length === 0) {
+      addError(diagnostics, "$.sessions", "At least one session is required.");
+    } else {
+      const seenSessionIds = new Set<string>();
+
+      ast.sessions.forEach((sessionValue, index) => {
+        const parsed = parseSession(sessionValue, `$.sessions[${index}]`, seenSessionIds, diagnostics);
+        if (parsed) {
+          sessions.push(parsed);
+        }
+      });
+    }
   }
 
-  const seenSessionIds = new Set<string>();
-  const sessions: Session[] = [];
+  if (sessions.length === 0) {
+    addError(diagnostics, hasBlocks ? "$.blocks" : "$.sessions", "At least one session is required.");
+  }
 
-  ast.sessions.forEach((sessionValue, index) => {
-    const parsed = parseSession(sessionValue, `$.sessions[${index}]`, seenSessionIds, diagnostics);
-    if (parsed) {
-      sessions.push(parsed);
+  if (totalBlockDays !== undefined && totalBlockDays > 0 && calendar) {
+    const expectedEndDate = addDaysIsoDate(calendar.start_date, totalBlockDays - 1);
+
+    if (calendar.end_date === undefined) {
+      calendar.end_date = expectedEndDate;
+    } else if (calendar.end_date !== expectedEndDate) {
+      addError(
+        diagnostics,
+        "$.calendar.end_date",
+        `calendar.end_date does not match blocks duration. Expected ${expectedEndDate}.`
+      );
     }
-  });
+  }
 
   const usesSchedule = sessions.some((session) => session.schedule !== undefined);
   if (usesSchedule) {
     if (!calendar) {
       addError(diagnostics, "$.calendar", "calendar is required when using session schedules.");
-    } else if (!calendar.end_date) {
+    } else if (!calendar.end_date && sessions.some((session) => session.schedule?.end_offset_days === undefined)) {
       addError(
         diagnostics,
         "$.calendar.end_date",
-        "calendar.end_date is required when using repeating session schedules."
+        "calendar.end_date is required when using repeating session schedules (unless end_offset_days is set)."
       );
     }
   }

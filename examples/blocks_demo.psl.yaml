@@ -1,0 +1,48 @@
+language_version: "0.1"
+
+metadata:
+  id: blocks_demo
+  name: Training Blocks Demo
+  description: >
+    Demonstrates block-based authoring: a 4-week accumulation block followed by a 1-week deload block.
+
+calendar:
+  start_date: "2026-03-02"
+
+blocks:
+  - id: accumulation
+    name: Accumulation (4 weeks)
+    duration: "4w"
+    sessions:
+      - id: bench
+        name: Bench (Volume)
+        schedule: "MON, FRI"
+        exercises:
+          - exercise: Barbell Bench Press
+            sets:
+              - shorthand: "5x5 @100kg"
+                progression: "+2.5kg every session"
+          - exercise: Row
+            sets: "3x10 @RIR2"
+
+      - id: squat
+        name: Squat
+        schedule: "WED"
+        exercises:
+          - exercise: Back Squat
+            sets:
+              - shorthand: "3x5 @75%"
+
+  - id: deload
+    name: Deload (1 week)
+    duration:
+      type: weeks
+      value: 1
+    sessions:
+      - id: bench
+        name: Bench (Deload)
+        schedule: "MON, FRI"
+        exercises:
+          - exercise: Barbell Bench Press
+            sets: "3x5 @70%"
+

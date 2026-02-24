@@ -21,6 +21,7 @@ If you want the formal schema/spec, see:
 - [Complete Example (Scheduled Program)](#complete-example-scheduled-program)
 - [Reference](#reference)
   - [Top-Level Fields](#top-level-fields)
+  - [Training Blocks](#training-blocks)
   - [Session](#session)
   - [Exercise](#exercise)
   - [Set](#set)
@@ -30,6 +31,7 @@ If you want the formal schema/spec, see:
   - [Shorthand Syntax](#shorthand-syntax)
   - [Compilation Output](#compilation-output)
   - [Materialization Output](#materialization-output)
+  - [Export (CSV/XLSX)](#export-csvxlsx)
   - [Validation and Diagnostics](#validation-and-diagnostics)
 - [Known Limitations](#known-limitations)
 
@@ -44,6 +46,9 @@ npm.cmd run psl:dev -- validate examples/hypertrophy_4day.psl.yaml
 # Validate (shorthand-heavy demo)
 npm.cmd run psl:dev -- validate examples/shorthand_demo.psl.yaml
 
+# Validate (blocks demo)
+npm.cmd run psl:dev -- validate examples/blocks_demo.psl.yaml
+
 # Compile (canonical compiled structure)
 npm.cmd run psl:dev -- compile examples/hypertrophy_4day.psl.yaml --out out.compiled.json
 
@@ -53,8 +58,17 @@ npm.cmd run psl:dev -- materialize examples/scheduling_demo.psl.yaml --out out.m
 # Materialize with progression (apply weekly_increment using completion results)
 npm.cmd run psl:dev -- materialize examples/progression_demo.psl.yaml --results examples/progression_demo.results.json --out out.progression_demo.materialized.json
 
+# Materialize (blocks demo)
+npm.cmd run psl:dev -- materialize examples/blocks_demo.psl.yaml --out out.blocks.materialized.json
+
 # Print (human-readable view)
 npm.cmd run psl:dev -- print examples/powerlifting_peak.psl.yaml
+
+# Export (CSV or XLSX workbook)
+npm.cmd run psl:dev -- export examples/blocks_demo.psl.yaml --format csv --out out.program.sets.csv
+npm.cmd run psl:dev -- export examples/blocks_demo.psl.yaml --format csv --table calendar --out out.program.calendar.csv
+npm.cmd run psl:dev -- export examples/blocks_demo.psl.yaml --format xlsx --out out.program.xlsx
+npm.cmd run psl:dev -- export examples/blocks_demo.psl.yaml --layout client --format xlsx --out out.client.xlsx
 ```
 
 ## Step-by-Step: Build a Program
@@ -98,11 +112,15 @@ calendar:
 Rules:
 
 - Dates must be `YYYY-MM-DD`.
-- If any session uses `schedule`, you must provide `calendar.end_date` so repetition can be materialized into a finite list.
+- If any session uses `schedule`, you must provide `calendar.end_date` so repetition can be materialized into a finite list, unless:
+  - every repeating `schedule` sets `end_offset_days`, or
+  - you author the program using [`blocks`](#training-blocks) (blocks compute a total end date).
 
 Reference: [`calendar`](#calendar)
 
-### Step 4: Define Sessions (`sessions`)
+### Step 4: Define Sessions (`sessions`) or Training Blocks (`blocks`)
+
+You can author a program either as a single list of session templates (`sessions`) or as sequential time-boxed blocks (`blocks`).
 
 `sessions` is a list of session templates. Each session has:
 
@@ -118,10 +136,35 @@ sessions:
   - id: day-1
     name: Day 1
     day: 1
-    exercises: []
+    exercises:
+      - exercise: Example Lift
+        sets: "1x1 @RPE8"
 ```
 
 Reference: [`sessions`](#sessions)
+
+Or, author the program as sequential **training blocks** (phases) with a duration:
+
+```yaml
+blocks:
+  - id: accumulation
+    name: Accumulation
+    duration: "4w"
+    sessions:
+      - id: bench
+        name: Bench
+        schedule: "MON, FRI"
+        exercises:
+          - exercise: Example Lift
+            sets: "1x1 @RPE8"
+
+  - id: deload
+    name: Deload
+    duration: "1w"
+    sessions: []
+```
+
+Reference: [`blocks`](#training-blocks), `examples/blocks_demo.psl.yaml`
 
 ### Step 5: Choose When Each Session Runs (`day` vs `schedule`)
 
@@ -133,10 +176,12 @@ You have two options.
 - id: squat-day
   name: Squat
   day: 1
-  exercises: []
+  exercises:
+    - exercise: Example Lift
+      sets: "1x1 @RPE8"
 ```
 
-2. Repeating schedule (requires `calendar` and `calendar.end_date`):
+2. Repeating schedule (requires `calendar`, and either `calendar.end_date` or `schedule.end_offset_days`):
 
 Every other day:
 
@@ -146,7 +191,9 @@ Every other day:
   schedule:
     type: interval_days
     every: 2
-  exercises: []
+  exercises:
+    - exercise: Example Lift
+      sets: "1x1 @RPE8"
 ```
 
 Mondays and Fridays:
@@ -157,7 +204,9 @@ Mondays and Fridays:
   schedule:
     type: weekdays
     days: [MON, FRI]
-  exercises: []
+  exercises:
+    - exercise: Example Lift
+      sets: "1x1 @RPE8"
 ```
 
 Shorthand alternatives:
@@ -440,7 +489,10 @@ Optional, but required if any session uses `schedule`.
 Fields:
 
 - `start_date` (string, `YYYY-MM-DD`) required when `calendar` exists
-- `end_date` (string, `YYYY-MM-DD`) required when using repeating `schedule`
+- `end_date` (string, `YYYY-MM-DD`) optional
+  - required when using repeating `schedule` unless:
+    - every repeating schedule sets `end_offset_days`, or
+    - you author using `blocks` (blocks compute a total end date)
 - `timezone` (string) optional
 
 Notes:
@@ -451,7 +503,93 @@ Notes:
 
 Type: array of session objects
 
-Required. Must contain at least one session.
+You must provide either `sessions` or [`blocks`](#training-blocks).
+
+If provided, it must contain at least one session.
+
+#### `blocks`
+
+Type: array of block objects
+
+You must provide either `blocks` or [`sessions`](#sessions).
+
+Blocks are optional; if provided, they define a sequential timeline of phases and contain their own sessions.
+
+Reference: [Training Blocks](#training-blocks)
+
+### Training Blocks
+
+Training blocks are an optional authoring feature for phased programs, for example:
+
+- 4-week accumulation block
+- 1-week deload block
+- 3-week peak block
+
+When you use blocks, PSL expands them into regular session templates during validation by:
+
+- Namespacing session ids with the block id (`<block_id>.<session_id>`)
+- Constraining repeating schedules with `schedule.end_offset_days` so sessions only repeat inside the block window
+- Computing a total `calendar.end_date` from `calendar.start_date` and the sum of block durations (so you do not need to manually calculate it)
+  - If you provide `calendar.end_date`, it must match the computed total duration.
+
+#### Block Shape
+
+```yaml
+blocks:
+  - id: accumulation
+    name: Accumulation (optional)
+    duration: "4w" # required; also supports "28d"
+    sessions: []   # optional; may be empty for a rest block
+```
+
+#### `duration`
+
+Required.
+
+Supported forms:
+
+```yaml
+duration: "4w"
+duration: "10d"
+```
+
+```yaml
+duration:
+  type: weeks # or days
+  value: 4
+```
+
+#### Sessions Inside Blocks
+
+Sessions inside a block use the same structure as regular sessions, but their timing fields are interpreted relative to the block start:
+
+- `session.id` becomes `<block_id>.<session_id>` in the normalized output and compiled program.
+  - This is the `session_id` you use in completion results.
+- `session.day` is 1-based relative to the block start (day 1 is the first day of the block).
+- `session.schedule.start_offset_days` / `end_offset_days` are 0-based relative to the block start.
+  - If `end_offset_days` is omitted inside a block, PSL treats it as the last day of the block.
+
+Blocks are contiguous: block N+1 starts immediately after block N ends.
+
+You can also use schedule offsets to make a session start late or end early inside a block:
+
+```yaml
+blocks:
+  - id: block1
+    duration: "4w"
+    sessions:
+      - id: overload
+        name: Overload (weeks 3-4 only)
+        schedule:
+          type: weekdays
+          days: [MON]
+          start_offset_days: 14 # start on block day 15 (week 3)
+        exercises:
+          - exercise: Back Squat
+            sets: "1x1 @85%"
+```
+
+Example: `examples/blocks_demo.psl.yaml`
 
 ### Session
 
@@ -486,7 +624,7 @@ Rule:
 
 Type: object or string
 
-Optional. Use `schedule` for repeating sessions (requires `calendar.end_date`).
+Optional. Use `schedule` for repeating sessions (requires `calendar`, and either `calendar.end_date` or `schedule.end_offset_days`).
 
 Rule:
 
@@ -509,6 +647,9 @@ Fields:
 
 - `every` (integer >= 1) required
 - `start_offset_days` (integer >= 0) optional
+- `end_offset_days` (integer >= 0) optional
+  - If set, the schedule only repeats through `calendar.start_date + end_offset_days` (inclusive).
+  - If omitted, `calendar.end_date` must be provided.
 
 Example (every other day):
 
@@ -526,6 +667,9 @@ Fields:
 
 - `days` (array) required; each element is one of `MON|TUE|WED|THU|FRI|SAT|SUN`
 - `start_offset_days` (integer >= 0) optional
+- `end_offset_days` (integer >= 0) optional
+  - If set, the schedule only repeats through `calendar.start_date + end_offset_days` (inclusive).
+  - If omitted, `calendar.end_date` must be provided.
 
 Example (Mondays and Fridays):
 
@@ -1020,6 +1164,7 @@ See also:
 
 - `examples/shorthand_demo.psl.yaml`
 - `examples/smolov_jr_bench.psl.yaml`
+- `examples/blocks_demo.psl.yaml`
 - `spec/shorthand.ebnf`
 
 #### Where Shorthand Is Allowed
@@ -1033,6 +1178,7 @@ See also:
 - `set.intensity`: object or shorthand string (with or without leading `@`)
 - `exercise.rest_seconds` and `exercise.rest`: integer seconds or duration string
 - `set.progression`: object or shorthand string
+- `block.duration`: string shorthand (e.g. `"4w"`, `"10d"`)
 
 #### Set Shorthand
 
@@ -1231,6 +1377,36 @@ See:
 
 - `src/compile/materialize.ts`
 
+### Export (CSV/XLSX)
+
+`export` materializes the program (expands repeating schedules into dated instances) and writes a spreadsheet-friendly table.
+
+Outputs:
+
+- `--format xlsx` (default `--layout data`): writes an `.xlsx` workbook with two sheets:
+  - `Calendar`: one row per day in the program date range (including rest days)
+  - `Sets`: one row per set instance
+- `--format csv` (default `--layout data`): writes a single table; defaults to `Sets`. Use `--table calendar` to export the daily calendar.
+- `--layout client`: writes a client-facing, human-readable layout:
+  - `--format xlsx`: a single `Program` sheet with grouped day/session/exercise rows.
+  - `--format csv`: a single `program` table (suitable for Excel import).
+
+Examples:
+
+```bash
+# Sets table (CSV)
+npm.cmd run psl:dev -- export examples/blocks_demo.psl.yaml --format csv --out out.program.sets.csv
+
+# Daily calendar (CSV)
+npm.cmd run psl:dev -- export examples/blocks_demo.psl.yaml --format csv --table calendar --out out.program.calendar.csv
+
+# Workbook (XLSX)
+npm.cmd run psl:dev -- export examples/blocks_demo.psl.yaml --format xlsx --out out.program.xlsx
+
+# Client-facing program sheet (XLSX)
+npm.cmd run psl:dev -- export examples/blocks_demo.psl.yaml --layout client --format xlsx --out out.client.xlsx
+```
+
 ### Validation and Diagnostics
 
 Validation returns diagnostics with:
@@ -1248,7 +1424,7 @@ Examples of errors:
 - Missing required fields (`metadata.id`, session `id`, etc.)
 - Intensity out of range (e.g. `rpe: 12`)
 - Session declares both `day` and `schedule`
-- Session uses `schedule` but program lacks `calendar.end_date`
+- Session uses `schedule` but program lacks `calendar.end_date` (and the schedule does not set `end_offset_days`)
 
 ## Known Limitations
 

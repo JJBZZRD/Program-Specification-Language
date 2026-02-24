@@ -28,12 +28,22 @@ On Windows PowerShell (when `npm.ps1` is blocked), use `npm.cmd`:
 
 ```bash
 npm.cmd run psl:dev -- validate examples/hypertrophy_4day.psl.yaml
+npm.cmd run psl:dev -- validate examples/blocks_demo.psl.yaml
 npm.cmd run psl:dev -- compile examples/hypertrophy_4day.psl.yaml --out out.compiled.json
 npm.cmd run psl:dev -- materialize examples/scheduling_demo.psl.yaml --out out.materialized.json
 npm.cmd run psl:dev -- materialize examples/progression_demo.psl.yaml --results examples/progression_demo.results.json --out out.progression_demo.materialized.json
 npm.cmd run psl:dev -- print examples/powerlifting_peak.psl.yaml
+npm.cmd run psl:dev -- export examples/blocks_demo.psl.yaml --format csv --out out.program.csv
+npm.cmd run psl:dev -- export examples/blocks_demo.psl.yaml --format xlsx --out out.program.xlsx
+npm.cmd run psl:dev -- export examples/blocks_demo.psl.yaml --layout client --format xlsx --out out.client.xlsx
 ```
+
+Notes:
+
+- `export --format xlsx` writes an `.xlsx` workbook with two sheets: `Calendar` (one row per day) and `Sets` (one row per set).
+- `export --format csv` defaults to exporting the `Sets` table; use `--table calendar` to export the daily calendar as CSV.
+- `export --layout client` writes a client-facing, human-readable program layout (one sheet for XLSX, one table for CSV).
 
 ## Status
 
-This repository provides a v0.1 specification and a working TypeScript reference implementation (parse/validate/compile/materialize), including scheduling, progression (`increment` / `weekly_increment`), `%1RM + load offset` targets (`plus_load`), and expanded coach-friendly shorthand (see `examples/shorthand_demo.psl.yaml`).
+This repository provides a v0.1 specification and a working TypeScript reference implementation (parse/validate/compile/materialize), including scheduling, progression (`increment` / `weekly_increment`), `%1RM + load offset` targets (`plus_load`), training blocks (`blocks`), and expanded coach-friendly shorthand (see `examples/shorthand_demo.psl.yaml`).

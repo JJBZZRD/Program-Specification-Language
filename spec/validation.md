@@ -14,6 +14,7 @@ PSL v0.1 accepts coach-friendly shorthand in the source YAML. Validation normali
 
 Accepted shorthand input shapes:
 
+- Top-level: either `sessions` or `blocks` (mutually exclusive)
 - `session.schedule`: object or shorthand string (e.g. `every other day`, `MON,FRI`, `every 4 days +1`)
 - `session.exercises`: array of exercises OR a multi-exercise block string
 - Exercise entries: object OR exercise shorthand string (single-line or multiline block)
@@ -23,12 +24,14 @@ Accepted shorthand input shapes:
 - `set.intensity`: object or shorthand string (e.g. `"75%"`, `"70%+5lb"`, `"@RPE8"`, `"150kg"`, `"[100,120]kg"`)
 - `exercise.rest_seconds` and `exercise.rest`: integer seconds or a duration string (e.g. `"90s"`, `"2m"`, `"2m30s"`, `"2:30"`)
 - `set.progression`: object or shorthand string (e.g. `"+2.5kg every 3 sessions on FRI if load>=target"`)
+- `block.duration`: string shorthand (e.g. `"4w"`, `"10d"`) or object `{type,value}`
 
 Normalization notes:
 
 - Multiline set blocks are split on newlines; `;` can separate multiple set entries on one line.
 - In set blocks, trailing `# ...` is captured as a `set.note`.
 - Shorthand parsing failures are surfaced as validation diagnostics.
+- Blocks expand into regular sessions by namespacing session ids (`<block_id>.<session_id>`), shifting session timing relative to the block start, and bounding schedules with `schedule.end_offset_days`.
 
 ## Reps and Sets
 
@@ -108,7 +111,7 @@ Both represent the same increment rule shape; `weekly_increment` defaults to a w
 1. A session must specify either `day` or `schedule` (but not both).
 2. `day` must be an integer >= 1 (relative to the program start).
 3. If any session uses `schedule`, the program must include `calendar`.
-4. If any session uses `schedule`, the program must include `calendar.end_date` so repeating sessions can be materialized into a finite list.
+4. If any session uses `schedule`, the program must include `calendar.end_date` unless all repeating schedules set `schedule.end_offset_days` (so repetition can be materialized into a finite list).
 5. `schedule` may be provided as a structured object or as a shorthand string; shorthand is parsed into one of the schedule types below.
 
 ### Schedule Types
@@ -116,9 +119,29 @@ Both represent the same increment rule shape; `weekly_increment` defaults to a w
 1. `schedule.type = interval_days` requires:
    - `every`: integer >= 1
    - optional `start_offset_days`: integer >= 0
+   - optional `end_offset_days`: integer >= 0
 2. `schedule.type = weekdays` requires:
    - `days`: non-empty array of `MON|TUE|WED|THU|FRI|SAT|SUN`
    - optional `start_offset_days`: integer >= 0
+   - optional `end_offset_days`: integer >= 0
+
+### Training Blocks
+
+Blocks are an optional authoring feature for phased programs.
+
+1. Program must specify exactly one of:
+   - `sessions` (top-level session templates), or
+   - `blocks` (sequential phases containing sessions)
+2. Each block must have:
+   - `id` (string, unique)
+   - `duration` (string shorthand like `"4w"` / `"10d"`, or object `{type,value}`)
+   - optional `sessions` (array; may be empty for a rest block)
+3. Blocks are contiguous: block N+1 starts immediately after block N ends.
+4. Normalization when using blocks:
+   - session ids are namespaced to `<block_id>.<session_id>`
+   - `day` and schedule offsets are interpreted relative to the block start and shifted into program-relative values
+   - repeating schedules are bounded using `schedule.end_offset_days` to the block window
+   - if a calendar is present, `calendar.end_date` is computed from `calendar.start_date` and the sum of block durations (and must match if explicitly provided)
 
 ## Diagnostics
 
