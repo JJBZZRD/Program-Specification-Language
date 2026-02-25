@@ -1,0 +1,12 @@
+language_version: "0.2"
+metadata:
+  id: invalid-session-day
+  name: Invalid Session Day
+sessions:
+  - id: day-1
+    day: 0
+    exercises:
+      - exercise: Bench Press
+        sets:
+          - count: 1
+            reps: 5

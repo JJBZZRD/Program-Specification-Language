@@ -1,0 +1,12 @@
+language_version: "0.2"
+metadata:
+  id: schedule-missing-calendar
+  name: Schedule Missing Calendar
+sessions:
+  - id: day-1
+    schedule: "MON, THU"
+    exercises:
+      - exercise: Bench Press
+        sets:
+          - count: 1
+            reps: 5

@@ -1,0 +1,14 @@
+language_version: "0.2"
+metadata:
+  id: conflicting-rest
+  name: Conflicting Rest
+sessions:
+  - id: day-1
+    day: 1
+    exercises:
+      - exercise: Bench Press
+        sets:
+          - count: 1
+            reps: 5
+            rest: "60s"
+            rest_seconds: 30

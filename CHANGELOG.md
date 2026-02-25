@@ -20,6 +20,7 @@ All notable changes to this project will be documented in this file.
 - Extended progression to support load-delta increments on `%1RM` targets (e.g. `progression: "+5lb every week"` on `@70%`).
 - Added optional training blocks (`blocks`) for phased programs, with durations (weeks/days) that expand into bounded schedules.
 - Added `schedule.end_offset_days` to bound repeating schedules without requiring a global `calendar.end_date`.
+- Expanded machine-readable JSON mode coverage and documented CLI-level JSON error mappings.
 
 ## 0.1.0 - 2026-02-19
 

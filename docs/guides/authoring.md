@@ -653,6 +653,9 @@ For compile/materialize workflows:
 - Do not parse human-readable stderr in JSON mode.
 - Parse stdout as JSON exactly once.
 - Expect warnings even when `ok=true`.
+- CLI usage/I/O failures (missing files, unreadable stdin, output write failures) still return the JSON envelope with `ok=false` and `PSL_E_INTERNAL`.
+- Results ingestion failures (read/parse/shape) return `PSL_E_RESULTS_MISMATCH`.
+- Flag conflicts (for example `--results` + `--results-stdin`, or `--stdin` + `--results-stdin`) return `PSL_E_CONFLICTING_FIELDS`.
 - `--out` still writes pretty JSON artifact files for human inspection, while `--json` stdout remains the machine envelope.
 - Preserve unknown top-level fields and unknown diagnostic codes when proxying data between services.
 
