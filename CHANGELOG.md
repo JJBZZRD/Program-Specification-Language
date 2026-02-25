@@ -21,6 +21,7 @@ All notable changes to this project will be documented in this file.
 - Added optional training blocks (`blocks`) for phased programs, with durations (weeks/days) that expand into bounded schedules.
 - Added `schedule.end_offset_days` to bound repeating schedules without requiring a global `calendar.end_date`.
 - Expanded machine-readable JSON mode coverage and documented CLI-level JSON error mappings.
+- Added `PSL_E_INPUT_IO` / `PSL_E_OUTPUT_IO` codes for CLI JSON mode I/O failures.
 
 ## 0.1.0 - 2026-02-19
 

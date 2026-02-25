@@ -30,7 +30,7 @@ export async function runCompileCommand(args: string[]): Promise<number> {
     if (jsonMode) {
       return writeJsonOutput({
         ok: false,
-        diagnostics: [createErrorDiagnostic(message, "PSL_E_INTERNAL")]
+        diagnostics: [createErrorDiagnostic(message, "PSL_E_INPUT_IO")]
       });
     }
     console.error("Usage: psl compile <file> [--out <output-file>] [--stdin] [--filename <name>] [--json]");
@@ -112,7 +112,7 @@ export async function runCompileCommand(args: string[]): Promise<number> {
       if (jsonMode) {
         return writeJsonOutput({
           ok: false,
-          diagnostics: [createErrorDiagnostic(`Failed to write output file: ${message}`, "PSL_E_INTERNAL")]
+          diagnostics: [createErrorDiagnostic(`Failed to write output file: ${message}`, "PSL_E_OUTPUT_IO")]
         });
       }
       console.error(`[error] $: Failed to write output file: ${message}`);

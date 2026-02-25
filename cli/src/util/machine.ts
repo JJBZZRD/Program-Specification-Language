@@ -10,6 +10,8 @@ export type StableDiagnosticCode =
   | "PSL_E_INVALID_INTENSITY_RANGE"
   | "PSL_E_SCHEDULE_REQUIRES_CALENDAR"
   | "PSL_E_RESULTS_MISMATCH"
+  | "PSL_E_INPUT_IO"
+  | "PSL_E_OUTPUT_IO"
   | "PSL_E_INTERNAL";
 
 export interface JsonDiagnosticRange {
@@ -167,4 +169,3 @@ export function printHumanDiagnostics(diagnostics: readonly Diagnostic[]): void 
     console.error(`[${diagnostic.severity}] ${diagnostic.path}: ${diagnostic.message}`);
   });
 }
-

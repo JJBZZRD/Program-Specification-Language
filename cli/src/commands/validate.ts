@@ -28,7 +28,7 @@ export async function runValidateCommand(args: string[]): Promise<number> {
     if (jsonMode) {
       return writeJsonOutput({
         ok: false,
-        diagnostics: [createErrorDiagnostic(message, "PSL_E_INTERNAL")]
+        diagnostics: [createErrorDiagnostic(message, "PSL_E_INPUT_IO")]
       });
     }
     console.error("Usage: psl validate <file> [--stdin] [--filename <name>] [--json]");

@@ -179,7 +179,7 @@ export async function run(): Promise<void> {
     assert.equal(result.code, 1);
     assert.equal(payload.ok, false);
     assertDiagnosticShape(diagnostic);
-    assert.equal(diagnostic.code, "PSL_E_INTERNAL");
+    assert.equal(diagnostic.code, "PSL_E_INPUT_IO");
     assert.equal(diagnostic.path, "$");
   }
 
@@ -287,7 +287,7 @@ export async function run(): Promise<void> {
     assert.equal(result.code, 1);
     assert.equal(payload.ok, false);
     assertDiagnosticShape(diagnostic);
-    assert.equal(diagnostic.code, "PSL_E_INTERNAL");
+    assert.equal(diagnostic.code, "PSL_E_INPUT_IO");
     assert.equal(diagnostic.path, "$");
   }
 
@@ -381,7 +381,7 @@ export async function run(): Promise<void> {
     assert.equal(result.code, 1);
     assert.equal(payload.ok, false);
     assertDiagnosticShape(diagnostic);
-    assert.equal(diagnostic.code, "PSL_E_INTERNAL");
+    assert.equal(diagnostic.code, "PSL_E_OUTPUT_IO");
     assert.equal("compiled" in payload, false);
   }
 
