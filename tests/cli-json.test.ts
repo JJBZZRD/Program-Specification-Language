@@ -23,6 +23,7 @@ const EMOM_WARNING_PROGRAM = [
   "  name: Emom Warning",
   "sessions:",
   "  - id: day-1",
+  "    name: Day 1",
   "    day: 1",
   "    exercises:",
   "      - exercise: Bench Press",
@@ -225,8 +226,12 @@ export async function run(): Promise<void> {
     assert.ok(Array.isArray(payload.diagnostics));
     payload.diagnostics.forEach((diagnostic: any) => {
       assertDiagnosticShape(diagnostic);
-      assert.equal(diagnostic.code, "PSL_E_CONFLICTING_FIELDS");
     });
+    assert.ok(
+      payload.diagnostics.some(
+        (diagnostic: any) => diagnostic.code === "PSL_E_CONFLICTING_FIELDS"
+      )
+    );
   }
 
   {

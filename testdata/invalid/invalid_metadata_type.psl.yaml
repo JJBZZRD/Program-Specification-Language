@@ -1,7 +1,11 @@
 language_version: "0.2"
-metadata: "not-an-object"
+metadata:
+  id: invalid-metadata
+  name: Invalid Metadata
+  description: 123
 sessions:
   - id: day-1
+    name: Day 1
     day: 1
     exercises:
       - exercise: Bench Press

@@ -4,6 +4,7 @@ metadata:
   name: Conflicting Rest
 sessions:
   - id: day-1
+    name: Day 1
     day: 1
     exercises:
       - exercise: Bench Press

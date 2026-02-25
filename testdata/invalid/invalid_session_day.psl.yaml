@@ -4,6 +4,7 @@ metadata:
   name: Invalid Session Day
 sessions:
   - id: day-1
+    name: Day 1
     day: 0
     exercises:
       - exercise: Bench Press

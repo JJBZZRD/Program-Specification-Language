@@ -4,6 +4,7 @@ metadata:
   name: Schedule Missing Calendar
 sessions:
   - id: day-1
+    name: Day 1
     schedule: "MON, THU"
     exercises:
       - exercise: Bench Press
