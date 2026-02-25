@@ -166,6 +166,111 @@ export function writeJsonOutput(output: JsonCommandOutput): number {
 
 export function printHumanDiagnostics(diagnostics: readonly Diagnostic[]): void {
   diagnostics.forEach((diagnostic) => {
-    console.error(`[${diagnostic.severity}] ${diagnostic.path}: ${diagnostic.message}`);
+    const location = formatHumanPath(diagnostic.path);
+    const message = humanizeMessage(diagnostic.message);
+    console.error(`[${diagnostic.severity}] ${location}: ${message}`);
   });
+}
+
+const HUMAN_PATH_LABELS: Record<string, string> = {
+  sessions: "Session",
+  blocks: "Block",
+  exercises: "Exercise",
+  sets: "Set",
+  groups: "Group",
+  calendar: "Calendar",
+  metadata: "Metadata",
+  schedule: "Schedule",
+  intensity: "Intensity",
+  progression: "Progression",
+  cadence: "Cadence",
+  constraints: "Constraints",
+  warmup: "Warmup",
+  substitutions: "Substitution",
+  rounding: "Rounding",
+  units: "Units"
+};
+
+function formatHumanPath(path: string | undefined): string {
+  if (!path || path === "$") {
+    return "Program";
+  }
+
+  const tokens: Array<{ type: "key" | "index" | "line"; value: string }> = [];
+  let index = 0;
+  while (index < path.length) {
+    const char = path[index]!;
+    if (char === ".") {
+      let end = index + 1;
+      while (end < path.length && path[end] !== "." && path[end] !== "[") {
+        end += 1;
+      }
+      const key = path.slice(index + 1, end);
+      if (key) {
+        tokens.push({ type: "key", value: key });
+      }
+      index = end;
+      continue;
+    }
+    if (char === "[") {
+      const end = path.indexOf("]", index);
+      const raw = end === -1 ? path.slice(index + 1) : path.slice(index + 1, end);
+      const trimmed = raw.trim();
+      if (/^line\s+\d+$/i.test(trimmed)) {
+        tokens.push({ type: "line", value: trimmed.replace(/^line\s+/i, "") });
+      } else if (/^\d+$/.test(trimmed)) {
+        tokens.push({ type: "index", value: trimmed });
+      } else if (trimmed) {
+        tokens.push({ type: "key", value: trimmed });
+      }
+      index = end === -1 ? path.length : end + 1;
+      continue;
+    }
+    index += 1;
+  }
+
+  const parts: string[] = [];
+  for (let i = 0; i < tokens.length; i += 1) {
+    const token = tokens[i]!;
+    if (token.type === "key") {
+      const label = HUMAN_PATH_LABELS[token.value] ?? toTitleCase(token.value);
+      const next = tokens[i + 1];
+      if (next && next.type === "index") {
+        const ordinal = Number(next.value) + 1;
+        parts.push(`${label} ${Number.isFinite(ordinal) ? ordinal : next.value}`);
+        i += 1;
+      } else {
+        parts.push(label);
+      }
+      continue;
+    }
+    if (token.type === "index") {
+      parts.push(`#${Number(token.value) + 1}`);
+      continue;
+    }
+    if (token.type === "line") {
+      parts.push(`line ${token.value}`);
+    }
+  }
+
+  return parts.length > 0 ? parts.join(" / ") : "Program";
+}
+
+function toTitleCase(value: string): string {
+  return value
+    .replace(/_/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function humanizeMessage(message: string): string {
+  return message
+    .replace(/\bexercise_id\b/g, "exercise id")
+    .replace(/\brest_seconds\b/g, "rest (seconds)")
+    .replace(/\brest_before_seconds\b/g, "rest before (seconds)")
+    .replace(/\brest_after_seconds\b/g, "rest after (seconds)")
+    .replace(/\bpercent_1rm\b/g, "%1RM")
+    .replace(/\bplus_load\b/g, "plus load")
+    .replace(/\bload_range\b/g, "load range");
 }

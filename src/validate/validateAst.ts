@@ -2105,7 +2105,12 @@ function parseExercise(
 
   const aliases = parseStringArray(exercise.aliases, `${path}.aliases`, diagnostics);
   if (aliases && aliases.length > 0 && !exercise_id) {
-    addError(diagnostics, `${path}.exercise_id`, "aliases require exercise_id for stable identity.");
+    const exerciseLabel = parsedName.exercise ? ` for exercise "${parsedName.exercise}"` : "";
+    addError(
+      diagnostics,
+      `${path}.exercise_id`,
+      `exercise_id is required${exerciseLabel} when aliases are provided.`
+    );
   }
 
   const family =
