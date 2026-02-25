@@ -473,21 +473,188 @@ npm.cmd run psl:dev -- validate path/to/program.psl.yaml
 
 #### Machine-readable JSON mode
 
-When integrating PSL with automated tooling (including AI-assisted authoring loops), add `--json`.
-In JSON mode, stdout contains exactly one JSON object and the process exit code is:
+Use machine-readable mode when PSL is called by scripts, services, CI checks, editors, or AI agents.
+Add `--json` to `validate`, `compile`, or `materialize`.
 
-- `0` when `"ok": true`
-- `1` when `"ok": false`
+### Why this mode exists
 
-Examples:
+- Stable contract for automation.
+- Deterministic success/failure detection via `ok` and exit code.
+- Structured diagnostics suitable for targeted self-correction.
+- No human-format logging noise on `stdout` in JSON mode.
+
+### Supported commands
+
+- `psl validate --json ...`
+- `psl compile --json ...`
+- `psl materialize --json ...`
+
+### Input patterns
+
+PSL source input:
+
+- File path argument:
+  - `psl validate --json examples/hypertrophy_4day.psl.yaml`
+- Stdin source:
+  - `cat program.psl.yaml | psl validate --stdin --json --filename program.psl.yaml`
+- Implicit stdin source (no file path provided):
+  - `cat program.psl.yaml | psl validate --json --filename program.psl.yaml`
+
+`--filename` is optional and used for friendlier source naming in diagnostics when source comes from stdin.
+
+Materialization results input:
+
+- File:
+  - `--results path/to/results.json`
+- Stdin:
+  - `--results-stdin` or `--results -`
+- Important:
+  - `--stdin` (source from stdin) and `--results-stdin` cannot be used together in one invocation because both would consume the same stdin stream.
+
+Materialization date window overrides:
+
+- `--start-date YYYY-MM-DD`
+- `--end-date YYYY-MM-DD`
+- These overrides apply only to the in-memory materialization input for that command run.
+
+### JSON output contract
+
+In `--json` mode, `stdout` contains exactly one JSON object:
+
+```json
+{
+  "ok": true,
+  "diagnostics": [
+    {
+      "severity": "warning",
+      "message": "example warning",
+      "path": "$.sessions[0].exercises[0]",
+      "range": {
+        "startLine": 12,
+        "startCol": 3,
+        "endLine": 12,
+        "endCol": 21
+      },
+      "code": "PSL_E_SCHEMA_VALIDATION"
+    }
+  ],
+  "compiled": {},
+  "materialized": {}
+}
+```
+
+Field semantics:
+
+- `ok`:
+  - `true` when there are no error diagnostics.
+  - `false` when one or more error diagnostics exist.
+- `diagnostics`:
+  - Always present.
+  - Each diagnostic contains `severity`, `message`, and `path`.
+  - `code` is provided for machine classification.
+  - `range` is optional and included when available.
+- `compiled`:
+  - Present only for `compile` mode when `ok=true`.
+- `materialized`:
+  - Present only for `materialize` mode when `ok=true`.
+
+### Exit code contract
+
+- Exit `0` when `ok=true`.
+- Exit `1` when `ok=false`.
+
+Recommended automation rule:
+
+- Trust exit code for control flow.
+- Use parsed JSON for detailed handling and correction logic.
+
+### Stable diagnostic codes
+
+Common codes you can branch on:
+
+- `PSL_E_PARSE_YAML`
+- `PSL_E_PARSE_SHORTHAND`
+- `PSL_E_SCHEMA_VALIDATION`
+- `PSL_E_MISSING_FIELD`
+- `PSL_E_CONFLICTING_FIELDS`
+- `PSL_E_INVALID_VALUE_RANGE`
+- `PSL_E_INVALID_INTENSITY_RANGE`
+- `PSL_E_SCHEDULE_REQUIRES_CALENDAR`
+- `PSL_E_RESULTS_MISMATCH`
+- `PSL_E_INTERNAL`
+
+Treat unknown codes as generic validation/runtime failures to preserve forward compatibility.
+
+### Command examples
+
+Validate file:
 
 ```bash
 psl validate --json examples/hypertrophy_4day.psl.yaml
+```
 
+Validate stdin source:
+
+```bash
 cat program.psl.yaml | psl validate --stdin --json --filename program.psl.yaml
+```
 
+Compile to JSON payload (`compiled` field):
+
+```bash
+psl compile --json examples/hypertrophy_4day.psl.yaml
+```
+
+Compile stdin source:
+
+```bash
+cat program.psl.yaml | psl compile --stdin --json --filename program.psl.yaml
+```
+
+Materialize with results file:
+
+```bash
+psl materialize --json --results examples/progression_demo.results.json examples/progression_demo.psl.yaml
+```
+
+Materialize with results stdin:
+
+```bash
+cat examples/progression_demo.results.json | psl materialize --json --results-stdin examples/progression_demo.psl.yaml
+```
+
+Materialize with date overrides:
+
+```bash
 psl materialize --json --results examples/results.json --start-date 2026-03-02 --end-date 2026-03-16 program.psl.yaml
 ```
+
+### Automation and AI self-correction pattern
+
+Typical correction loop:
+
+1. Run `psl validate --json ...`.
+2. Parse JSON object from stdout.
+3. If `ok=true`, stop.
+4. If `ok=false`, iterate diagnostics:
+   - Use `code` to classify failure type.
+   - Use `path` to localize edits.
+   - Use `message` for fix details.
+5. Apply targeted edits and re-run.
+
+For compile/materialize workflows:
+
+1. Validate or compile in `--json` mode.
+2. If `ok=false`, handle diagnostics first.
+3. If `ok=true`, consume `compiled`/`materialized` directly from JSON.
+
+### Notes for robust consumers
+
+- Do not parse human-readable stderr in JSON mode.
+- Parse stdout as JSON exactly once.
+- Expect warnings even when `ok=true`.
+- `--out` still writes pretty JSON artifact files for human inspection, while `--json` stdout remains the machine envelope.
+- Preserve unknown top-level fields and unknown diagnostic codes when proxying data between services.
 
 ---
 
