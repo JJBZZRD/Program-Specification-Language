@@ -1,0 +1,10 @@
+language_version: "0.1"
+sessions:
+  - id: day-1
+    name: Day 1
+    day: 1
+    exercises:
+      - exercise: Back Squat
+        sets:
+          - "3x5 @75%"
+

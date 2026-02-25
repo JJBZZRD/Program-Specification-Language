@@ -18,7 +18,7 @@ const handlers: Record<string, CommandHandler> = {
 
 function printUsage(): void {
   console.log(
-    "Usage: psl <validate|compile|materialize|print|export> <file> [--out <output-file>] [--results <results.json>]"
+    "Usage: psl <validate|compile|materialize|print|export> <file> [--stdin] [--json] [--out <output-file>] [--results <results.json>]"
   );
 }
 

@@ -471,6 +471,24 @@ eccentric_seconds: 3
 npm.cmd run psl:dev -- validate path/to/program.psl.yaml
 ```
 
+#### Machine-readable JSON mode
+
+When integrating PSL with automated tooling (including AI-assisted authoring loops), add `--json`.
+In JSON mode, stdout contains exactly one JSON object and the process exit code is:
+
+- `0` when `"ok": true`
+- `1` when `"ok": false`
+
+Examples:
+
+```bash
+psl validate --json examples/hypertrophy_4day.psl.yaml
+
+cat program.psl.yaml | psl validate --stdin --json --filename program.psl.yaml
+
+psl materialize --json --results examples/results.json --start-date 2026-03-02 --end-date 2026-03-16 program.psl.yaml
+```
+
 ---
 
 ### Step 11: Compile and materialize
