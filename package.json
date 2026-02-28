@@ -14,7 +14,10 @@
     }
   },
   "files": [
-    "dist"
+    "dist",
+    "AI_CONTEXT.md",
+    "docs",
+    "examples"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
