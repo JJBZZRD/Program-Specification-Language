@@ -14,6 +14,14 @@ PSL is designed to be readable by coaches, deterministic for software, and porta
 - `cli/`: command-line tool scaffolding
 - `tests/`: parser/validator/compiler tests
 
+## AI Context
+
+Quick orientation files for AI agents and humans:
+
+- `AI_CONTEXT.md`: curated high-signal overview and routing map
+- `ai-manifest.json`: machine-readable index of specs, entrypoints, examples, and commands
+- `FEATURES.md`: implementation matrix (implemented vs partial vs spec-only vs planned)
+
 ## Getting Started
 
 ```bash

@@ -1,0 +1,78 @@
+{
+  "project": "Program Specification Language",
+  "short_name": "PSL",
+  "versions_supported": [
+    "0.1",
+    "0.2"
+  ],
+  "current_language_version": "0.2",
+  "entrypoints": {
+    "public_api": "src/index.ts",
+    "cli_main": "cli/src/main.ts",
+    "package_main": "dist/index.js",
+    "package_types": "dist/index.d.ts"
+  },
+  "spec": {
+    "schema": "spec/psl.schema.json",
+    "shorthand_grammar": "spec/shorthand.ebnf",
+    "semantic_validation": "spec/validation.md",
+    "version_notes": [
+      "spec/versions/0.1.md",
+      "spec/versions/0.2.md"
+    ],
+    "authoring_guides": [
+      "docs/guides/authoring.md",
+      "docs/guides/authoring_v0.1.md"
+    ]
+  },
+  "examples": {
+    "directory": "examples",
+    "recommended": [
+      "examples/hypertrophy_4day.psl.yaml",
+      "examples/scheduling_demo.psl.yaml",
+      "examples/shorthand_demo.psl.yaml",
+      "examples/progression_demo.psl.yaml",
+      "examples/blocks_demo.psl.yaml",
+      "examples/v0_2_language_growth.psl.yaml"
+    ],
+    "results_samples": [
+      "examples/progression_demo.results.json",
+      "examples/cadence_demo.results.json"
+    ]
+  },
+  "implementation": {
+    "parser": "src/parse",
+    "validator": "src/validate",
+    "compiler": "src/compile/compileProgram.ts",
+    "materializer": "src/compile/materialize.ts",
+    "runtime_types": "src/runtime/progression.ts",
+    "cli": "cli/src",
+    "cli_commands": "cli/src/commands",
+    "exporter": "cli/src/commands/export.ts"
+  },
+  "commands": {
+    "dev_wrapper": "npm.cmd run psl:dev --",
+    "built_wrapper": "npm.cmd run psl --",
+    "validate": {
+      "template": "validate <file> [--stdin] [--filename <name>] [--json]",
+      "json_mode": true
+    },
+    "compile": {
+      "template": "compile <file> [--out <output-file>] [--stdin] [--filename <name>] [--json]",
+      "json_mode": true
+    },
+    "materialize": {
+      "template": "materialize <file> [--results <results.json> | --results-stdin] [--start-date YYYY-MM-DD] [--end-date YYYY-MM-DD] [--out <output-file>] [--stdin] [--filename <name>] [--json]",
+      "json_mode": true
+    },
+    "export": {
+      "template": "export <file> [--format csv|xlsx] [--layout data|client] [--out <output>] [--table sets|calendar] [--results <results.json>] [--start-date YYYY-MM-DD] [--end-date YYYY-MM-DD] [--days N | --weeks N]",
+      "json_mode": false
+    },
+    "print": {
+      "template": "print <file>",
+      "json_mode": false
+    }
+  },
+  "glossary": "docs/design/glossary.md"
+}
