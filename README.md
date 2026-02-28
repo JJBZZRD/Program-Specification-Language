@@ -22,6 +22,45 @@ npm run test
 npm run build
 ```
 
+## Install As A Dependency
+
+Install from a GitHub tag:
+
+```bash
+npm i github:JJBZZRD/Program-Specification-Language#v0.2.0
+```
+
+Install from a specific commit:
+
+```bash
+npm i github:JJBZZRD/Program-Specification-Language#<commit-sha>
+```
+
+Basic usage:
+
+```ts
+import {
+  compileProgram,
+  materialize,
+  parseDocument,
+  validateAst
+} from "program-specification-language";
+
+const ast = parseDocument(sourceText);
+const validation = validateAst(ast);
+
+if (validation.value) {
+  const compiled = compileProgram(validation.value);
+  const sessions = materialize(compiled);
+  console.log(sessions);
+}
+```
+
+Expo/Metro note:
+
+- Consume PSL through `program-specification-language` package imports only.
+- Do not import from `src/*.ts`; the package is intended to be consumed from compiled JS in `dist/`.
+
 ## CLI (Local)
 
 On Windows PowerShell (when `npm.ps1` is blocked), use `npm.cmd`:
