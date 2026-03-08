@@ -1,6 +1,6 @@
 {
   "name": "program-specification-language",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Declarative DSL for structured resistance training programs.",
   "license": "Apache-2.0",
   "type": "module",
