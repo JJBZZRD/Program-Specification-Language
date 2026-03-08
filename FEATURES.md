@@ -2,7 +2,7 @@
 
 Status values:
 
-- `implemented`: works end-to-end for intended v0.2 scope.
+- `implemented`: works end-to-end for intended v0.3 scope.
 - `partial`: shape exists but runtime/consumer behavior is limited.
 - `spec-only`: represented/validated but not executed in runtime behavior.
 - `planned`: not implemented yet.
@@ -16,9 +16,10 @@ Pipeline columns:
 | Feature | Spec Status | Parse | Validate | Compile | Materialize | Export | CLI-JSON | Notes |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | YAML source parsing (`parseDocument`) | implemented | Y | Y | Y | Y | Y | Y | YAML -> object parse is the entrypoint for all CLI commands. |
-| Language versions `0.1` + `0.2` | implemented | Y | Y | Y | Y | Y | Y | Enforced in validator (`SUPPORTED_LANGUAGE_VERSIONS`). |
+| Language versions `0.1` + `0.2` + `0.3` | implemented | Y | Y | Y | Y | Y | Y | Enforced in validator (`SUPPORTED_LANGUAGE_VERSIONS`). |
 | Program structure (`sessions` xor `blocks`) | implemented | Y | Y | Y | Y | Y | Y | Exactly one of `sessions` or `blocks`. |
-| Session timing invariant (`day` xor `schedule`) | implemented | Y | Y | Y | Y | Y | Y | Session must choose one timing mode. |
+| Session timing invariant (`day` xor `schedule`, or top-level `sequence` in flat v0.3 programs) | implemented | Y | Y | Y | Y | Y | Y | Validator normalizes `sequence` into canonical session timing. |
+| Top-level ordered split `sequence` (`repeat`, `session_id`, `rest_after_days`) | implemented | Y | Y | Y | Y | Y | Y | v0.3 authoring sugar only; normalized to `day` or `interval_days` schedules before compile/materialize. |
 | Schedule model (`interval_days`, `weekdays`, offsets) | implemented | Y | Y | Y | Y | Y | Y | Includes schedule shorthand parsing and bounded windows. |
 | Block durations + expansion + namespaced ids | implemented | Y | Y | Y | Y | Y | Y | Block sessions become `<block_id>.<session_id>`; offsets are shifted. |
 | Shorthand surfaces (schedule/exercise/set/reps/intensity/progression) | implemented | Y | Y | Y | Y | Y | Y | Parsed in validator normalization path; deterministic mapping. |
@@ -46,7 +47,7 @@ Pipeline columns:
 
 ## Deferred / Later-Version Focus
 
-Roadmap and docs indicate deferred runtime behavior beyond current v0.2 implementation:
+Roadmap and docs indicate deferred runtime behavior beyond current v0.3 implementation:
 
 - Context-aware runtime rule evaluation (`docs/roadmap.md`, v0.3 section).
 - Full execution of declarative progression strategies (`auto_adjust`) and aggregate criteria logic.

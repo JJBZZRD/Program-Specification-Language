@@ -36,6 +36,18 @@ import type { Diagnostic, ValidationResult } from "./diagnostics.js";
 
 type UnknownRecord = Record<string, unknown>;
 
+interface ProgramSequenceItem {
+  session_id: string;
+  rest_after_days: number;
+}
+
+interface ProgramSequence {
+  repeat: boolean;
+  items: ProgramSequenceItem[];
+}
+
+type SessionTimingMode = "required" | "forbidden";
+
 const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const WEEKDAYS: readonly Weekday[] = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"];
 const WEEKDAY_SET = new Set<string>(WEEKDAYS);
@@ -2593,7 +2605,8 @@ function parseSession(
   path: string,
   seenIds: Set<string>,
   diagnostics: Diagnostic[],
-  aliasMap: Record<string, string>
+  aliasMap: Record<string, string>,
+  timingMode: SessionTimingMode = "required"
 ): Session | undefined {
   const startIndex = diagnostics.length;
 
@@ -2616,25 +2629,37 @@ function parseSession(
 
   const hasDay = session.day !== undefined;
   const hasSchedule = session.schedule !== undefined;
-  if (hasDay && hasSchedule) {
-    addError(diagnostics, `${path}.day`, "Specify either day or schedule, not both.");
-    addError(diagnostics, `${path}.schedule`, "Specify either day or schedule, not both.");
-  }
-  if (!hasDay && !hasSchedule) {
-    addError(diagnostics, path, "Session must specify either day or schedule.");
+  if (timingMode === "forbidden") {
+    if (hasDay) {
+      addError(diagnostics, `${path}.day`, "Do not specify day when using top-level sequence.");
+    }
+    if (hasSchedule) {
+      addError(diagnostics, `${path}.schedule`, "Do not specify schedule when using top-level sequence.");
+    }
+  } else {
+    if (hasDay && hasSchedule) {
+      addError(diagnostics, `${path}.day`, "Specify either day or schedule, not both.");
+      addError(diagnostics, `${path}.schedule`, "Specify either day or schedule, not both.");
+    }
+    if (!hasDay && !hasSchedule) {
+      addError(diagnostics, path, "Session must specify either day or schedule.");
+    }
   }
 
   const day =
-    session.day === undefined
+    timingMode === "forbidden" || session.day === undefined
       ? undefined
       : typeof session.day === "number" && Number.isInteger(session.day) && session.day >= 1
         ? session.day
         : undefined;
-  if (hasDay && day === undefined) {
+  if (timingMode !== "forbidden" && hasDay && day === undefined) {
     addError(diagnostics, `${path}.day`, "Session day must be an integer >= 1.");
   }
 
-  const schedule = hasSchedule ? parseSchedule(session.schedule, `${path}.schedule`, diagnostics) : undefined;
+  const schedule =
+    timingMode === "forbidden" || !hasSchedule
+      ? undefined
+      : parseSchedule(session.schedule, `${path}.schedule`, diagnostics);
   const slot = parseSessionSlot(session.slot, `${path}.slot`, diagnostics);
 
   const hasRestDefaultSeconds = session.rest_default_seconds !== undefined;
@@ -2873,6 +2898,83 @@ function parseExerciseAliasMap(
   return result;
 }
 
+function parseProgramSequence(
+  value: unknown,
+  path: string,
+  diagnostics: Diagnostic[]
+): ProgramSequence | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  const startIndex = diagnostics.length;
+  if (!isRecord(value)) {
+    addError(diagnostics, path, "sequence must be an object.");
+    return undefined;
+  }
+
+  const repeat = value.repeat;
+  if (typeof repeat !== "boolean") {
+    addError(diagnostics, `${path}.repeat`, "sequence.repeat must be a boolean.");
+  }
+
+  if (!Array.isArray(value.items) || value.items.length === 0) {
+    addError(diagnostics, `${path}.items`, "sequence.items must be a non-empty array.");
+    return undefined;
+  }
+
+  const items: ProgramSequenceItem[] = [];
+  const seenSessionIds = new Set<string>();
+
+  value.items.forEach((itemValue, index) => {
+    const itemPath = `${path}.items[${index}]`;
+    if (!isRecord(itemValue)) {
+      addError(diagnostics, itemPath, "sequence item must be an object.");
+      return;
+    }
+
+    let sessionId: string | undefined;
+    if (typeof itemValue.session_id !== "string" || itemValue.session_id.trim() === "") {
+      addError(diagnostics, `${itemPath}.session_id`, "session_id is required.");
+    } else {
+      sessionId = itemValue.session_id.trim();
+      if (seenSessionIds.has(sessionId)) {
+        addError(
+          diagnostics,
+          `${itemPath}.session_id`,
+          `sequence cannot reference the same session more than once: ${sessionId}`
+        );
+      } else {
+        seenSessionIds.add(sessionId);
+      }
+    }
+
+    if (
+      typeof itemValue.rest_after_days !== "number" ||
+      !Number.isInteger(itemValue.rest_after_days) ||
+      itemValue.rest_after_days < 0
+    ) {
+      addError(diagnostics, `${itemPath}.rest_after_days`, "rest_after_days must be an integer >= 0.");
+      return;
+    }
+
+    if (!sessionId) {
+      return;
+    }
+
+    items.push({
+      session_id: sessionId,
+      rest_after_days: itemValue.rest_after_days
+    });
+  });
+
+  if (hasNewErrors(diagnostics, startIndex) || typeof repeat !== "boolean") {
+    return undefined;
+  }
+
+  return { repeat, items };
+}
+
 function parseProgramLevelModifiers(
   source: UnknownRecord,
   path: string,
@@ -2888,6 +2990,63 @@ function parseProgramLevelModifiers(
     path,
     diagnostics
   );
+}
+
+function normalizeSessionsFromSequence(
+  sessions: Session[],
+  sequence: ProgramSequence,
+  diagnostics: Diagnostic[],
+  sourceIndexBySessionId: Map<string, number>
+): Session[] {
+  const sessionById = new Map<string, Session>();
+  sessions.forEach((session) => {
+    sessionById.set(session.id, session);
+  });
+
+  const referencedIds = new Set<string>();
+  const normalized: Session[] = [];
+  let startOffsetDays = 0;
+  const cycleLengthDays = sequence.items.reduce((total, item) => total + item.rest_after_days + 1, 0);
+
+  sequence.items.forEach((item, index) => {
+    const itemPath = `$.sequence.items[${index}].session_id`;
+    const session = sessionById.get(item.session_id);
+    if (!session) {
+      addError(diagnostics, itemPath, `Unknown session_id "${item.session_id}" in sequence.`);
+      return;
+    }
+
+    referencedIds.add(item.session_id);
+    normalized.push({
+      ...session,
+      ...(sequence.repeat
+        ? {
+            schedule: {
+              type: "interval_days",
+              every: cycleLengthDays,
+              ...(startOffsetDays > 0 ? { start_offset_days: startOffsetDays } : {})
+            }
+          }
+        : {
+            day: startOffsetDays + 1
+          })
+    });
+
+    startOffsetDays += item.rest_after_days + 1;
+  });
+
+  sessions.forEach((session, index) => {
+    if (!referencedIds.has(session.id)) {
+      const sourceIndex = sourceIndexBySessionId.get(session.id) ?? index;
+      addError(
+        diagnostics,
+        `$.sessions[${sourceIndex}].id`,
+        `Session "${session.id}" must appear exactly once in top-level sequence.items.`
+      );
+    }
+  });
+
+  return normalized;
 }
 
 export function validateAst(ast: unknown): ValidationResult<ProgramAst> {
@@ -2915,17 +3074,27 @@ export function validateAst(ast: unknown): ValidationResult<ProgramAst> {
   const units = ast.units !== undefined ? parseLoadUnit(ast.units, "$.units", diagnostics) : undefined;
   const rounding = parseRoundingPolicy(ast.rounding, "$.rounding", diagnostics);
   const exerciseAliasMap = parseExerciseAliasMap(ast.exercise_aliases, "$.exercise_aliases", diagnostics);
+  const programSequence = parseProgramSequence(ast.sequence, "$.sequence", diagnostics);
 
   const sessions: Session[] = [];
+  const flatSessionIndexById = new Map<string, number>();
   let totalBlockDays: number | undefined;
 
   const hasSessions = ast.sessions !== undefined;
   const hasBlocks = ast.blocks !== undefined;
+  const hasSequence = ast.sequence !== undefined;
+
+  if (hasSequence && validLanguage !== undefined && validLanguage !== "0.3") {
+    addError(diagnostics, "$.sequence", "Top-level sequence requires language_version 0.3.");
+  }
 
   if (hasSessions && hasBlocks) {
     addError(diagnostics, "$.sessions", "Specify either sessions or blocks, not both.");
     addError(diagnostics, "$.blocks", "Specify either blocks or sessions, not both.");
   } else if (hasBlocks) {
+    if (hasSequence) {
+      addError(diagnostics, "$.sequence", "Top-level sequence is only supported with flat sessions programs.");
+    }
     if (!Array.isArray(ast.blocks) || ast.blocks.length === 0) {
       addError(diagnostics, "$.blocks", "At least one block is required.");
     } else {
@@ -3046,10 +3215,12 @@ export function validateAst(ast: unknown): ValidationResult<ProgramAst> {
           `$.sessions[${index}]`,
           seenSessionIds,
           diagnostics,
-          exerciseAliasMap
+          exerciseAliasMap,
+          hasSequence ? "forbidden" : "required"
         );
         if (parsed) {
           sessions.push(parsed);
+          flatSessionIndexById.set(parsed.id, index);
         }
       });
     }
@@ -3058,6 +3229,11 @@ export function validateAst(ast: unknown): ValidationResult<ProgramAst> {
   if (sessions.length === 0) {
     addError(diagnostics, hasBlocks ? "$.blocks" : "$.sessions", "At least one session is required.");
   }
+
+  const normalizedSessions =
+    !hasBlocks && programSequence && sessions.length > 0
+      ? normalizeSessionsFromSequence(sessions, programSequence, diagnostics, flatSessionIndexById)
+      : sessions;
 
   if (calendar && totalBlockDays !== undefined && totalBlockDays > 0) {
     const expectedEndDate = addDaysIsoDate(calendar.start_date, totalBlockDays - 1);
@@ -3072,11 +3248,11 @@ export function validateAst(ast: unknown): ValidationResult<ProgramAst> {
     }
   }
 
-  const usesSchedule = sessions.some((session) => session.schedule !== undefined);
+  const usesSchedule = normalizedSessions.some((session) => session.schedule !== undefined);
   if (usesSchedule) {
     if (!calendar) {
       addError(diagnostics, "$.calendar", "calendar is required when using session schedules.");
-    } else if (!calendar.end_date && sessions.some((session) => session.schedule?.end_offset_days === undefined)) {
+    } else if (!calendar.end_date && normalizedSessions.some((session) => session.schedule?.end_offset_days === undefined)) {
       addError(
         diagnostics,
         "$.calendar.end_date",
@@ -3085,7 +3261,7 @@ export function validateAst(ast: unknown): ValidationResult<ProgramAst> {
     }
   }
 
-  const usesExecutableProgression = sessions.some((session) =>
+  const usesExecutableProgression = normalizedSessions.some((session) =>
     session.exercises.some((exercise) =>
       exercise.sets.some((set) => set.progression?.type === "increment" || set.progression?.type === "weekly_increment")
     )
@@ -3109,7 +3285,7 @@ export function validateAst(ast: unknown): ValidationResult<ProgramAst> {
       ...(units ? { units } : {}),
       ...(rounding ? { rounding } : {}),
       ...(Object.keys(exerciseAliasMap).length > 0 ? { exercise_aliases: exerciseAliasMap } : {}),
-      sessions
+      sessions: normalizedSessions
     }
   };
 }

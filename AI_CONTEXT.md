@@ -17,10 +17,10 @@ Primary design references:
 
 ## 2) Core Ontology (Semantic Primitives)
 
-- `Program`: top-level document (`language_version`, `metadata`, optional calendar/units/rounding, and exactly one of `sessions` or `blocks`).
+- `Program`: top-level document (`language_version`, `metadata`, optional calendar/units/rounding, optional top-level `sequence`, and exactly one of `sessions` or `blocks`).
 - `Calendar`: dated context (`start_date`, optional `end_date`, optional `timezone`) used for schedule expansion/materialization.
 - `Block`: phase container with duration (`4w`, `10d`, or typed object), optional modifiers, and nested sessions; expands into namespaced sessions.
-- `Session`: training template with `id`, `name`, exercises, and exactly one of `day` or `schedule`.
+- `Session`: training template with `id`, `name`, exercises, and canonical timing via exactly one of `day` or `schedule` after normalization.
 - `Group`: intra-session grouping (`superset`, `circuit`, `giant_set`) referenced by `exercise.group_id`.
 - `Exercise`: movement prescription with sets and optional identity (`exercise_id`), aliases, constraints, warmups, substitutions, tempo, and rest loci.
 - `Set`: atomic prescription (`count`, reps/time work, intensity, role, rest fields, constraints, repeat, progression, notes).
@@ -34,6 +34,7 @@ Primary design references:
 Shorthand is currently accepted in these source fields:
 
 - `session.schedule`: string shorthand (examples: `"MON, FRI"`, `"every other day"`, `"every 4 days +1"`).
+- `program.sequence`: ordered split authoring sugar for flat `sessions` programs (`repeat`, `items[].session_id`, `items[].rest_after_days`), normalized to canonical timing primitives in validation.
 - `session.exercises`: multi-exercise shorthand block string.
 - `session.exercises[]`: exercise shorthand string entries (for example `"Bench Press: 5x5 @75%; rest 2m"`).
 - `exercise.sets`: string shorthand block.
@@ -52,7 +53,7 @@ Inline progression shorthand (`; +2.5kg every week if success`) is supported in 
 ### Structural invariants
 
 - Program must define exactly one of `sessions` or `blocks`.
-- Session must define exactly one of `day` or `schedule`.
+- Session must define exactly one of `day` or `schedule` in canonical AST; v0.3 source may use top-level `sequence` instead for flat sessions programs.
 - Session must include at least one exercise.
 - Exercise must include at least one set.
 - Session IDs must be unique after block expansion (`<block_id>.<session_id>`).
@@ -115,7 +116,7 @@ Primary source-of-truth files:
 - Schema: `spec/psl.schema.json`
 - Shorthand grammar: `spec/shorthand.ebnf`
 - Semantic validation rules: `spec/validation.md`
-- Version notes: `spec/versions/0.1.md`, `spec/versions/0.2.md`
+- Version notes: `spec/versions/0.1.md`, `spec/versions/0.2.md`, `spec/versions/0.3.md`
 
 Authoring guides (high-level, not canonical over schema/validator behavior):
 

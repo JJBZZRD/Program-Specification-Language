@@ -1,4 +1,4 @@
-# PSL Authoring Guide (v0.2, v0.1-Compatible)
+# PSL Authoring Guide (v0.3, v0.2/v0.1-Compatible)
 
 This is the primary tutorial for authoring PSL programs.
 
@@ -6,6 +6,7 @@ It combines:
 
 - The full step-by-step v0.1 workflow.
 - v0.2 language growth features for real coaching use (powerlifting + bodybuilding).
+- v0.3 authoring sugar for ordered split-based session sequencing.
 - A deep shorthand guide so coaches can author quickly without losing deterministic semantics.
 
 PSL remains declarative internally. Shorthand is surface syntax that compiles to canonical AST.
@@ -48,7 +49,7 @@ PSL remains declarative internally. Shorthand is surface syntax that compiles to
   - [Shorthand recipes coaches actually use](#shorthand-recipes-coaches-actually-use)
   - [Shorthand troubleshooting](#shorthand-troubleshooting)
 - [Compilation, Materialization, Export](#compilation-materialization-export)
-- [Migration Notes (v0.1 -> v0.2)](#migration-notes-v01---v02)
+- [Migration Notes (v0.1 and v0.2 -> v0.3)](#migration-notes-v01-and-v02---v03)
 - [Known Runtime Boundaries](#known-runtime-boundaries)
 
 ---
@@ -92,15 +93,16 @@ PSL currently accepts:
 
 - `language_version: "0.1"`
 - `language_version: "0.2"`
+- `language_version: "0.3"`
 
 Recommended:
 
-- Use `"0.2"` for new programs.
+- Use `"0.3"` for new programs.
 - Keep `"0.1"` for frozen historical programs if desired.
 
-Compatibility guarantee in v0.2:
+Compatibility guarantee in v0.3:
 
-- Valid v0.1 documents still parse/validate/compile/materialize.
+- Valid v0.1 and v0.2 documents still parse/validate/compile/materialize.
 
 ---
 
@@ -111,7 +113,7 @@ Compatibility guarantee in v0.2:
 For new authoring:
 
 ```yaml
-language_version: "0.2"
+language_version: "0.3"
 ```
 
 ---
@@ -185,12 +187,12 @@ blocks:
 
 ---
 
-### Step 5: Place sessions in time (`day` or `schedule`)
+### Step 5: Place sessions in time (`day`, `schedule`, or top-level `sequence`)
 
-Each session must use exactly one:
+Flat `sessions` programs have two timing modes:
 
-- `day` (fixed offset from `calendar.start_date`, 1-based), or
-- `schedule` (repeating pattern).
+- Per-session timing: each session uses exactly one of `day` or `schedule`.
+- Top-level sequencing (`v0.3`): sessions omit `day`/`schedule`, and the program-level `sequence` defines ordered timing.
 
 #### Fixed day
 
@@ -221,6 +223,41 @@ schedule: "MON, THU"
 schedule: "every other day"
 schedule: "every 4 days +1"
 ```
+
+#### Top-level ordered sequence (`v0.3`)
+
+Use this when you want a flat rotation such as PPL, upper/lower, or similar split order without hand-authoring offsets on each session.
+
+```yaml
+sessions:
+  - id: day1
+    name: Program Day 1
+    exercises: ...
+  - id: day2
+    name: Program Day 2
+    exercises: ...
+  - id: day3
+    name: Program Day 3
+    exercises: ...
+
+sequence:
+  repeat: true
+  items:
+    - session_id: day1
+      rest_after_days: 1
+    - session_id: day2
+      rest_after_days: 1
+    - session_id: day3
+      rest_after_days: 2
+```
+
+Normalization rules:
+
+- `rest_after_days` counts rest days before the next sequence item.
+- `repeat: true` normalizes to per-session `interval_days` schedules using the full cycle length.
+- `repeat: false` normalizes to fixed `day` values.
+- Each session id must appear exactly once in `sequence.items`.
+- When `repeat: true`, `calendar.end_date` is still required unless all resulting schedules are otherwise bounded.
 
 ---
 
@@ -705,6 +742,7 @@ Optional:
 - `units`
 - `rounding`
 - `exercise_aliases`
+- `sequence` (`v0.3`, flat `sessions` only)
 
 ### Training Blocks
 
@@ -730,8 +768,8 @@ Blocks are expanded into normalized sessions with:
 Core fields:
 
 - `id`, `name`
-- one of `day` or `schedule`
 - `exercises`
+- one of `day` or `schedule` when not using top-level `sequence`
 
 v0.2 additions:
 
@@ -1164,13 +1202,13 @@ Sets export includes slot-aware data columns (for same-day AM/PM/EVE sessions).
 
 ---
 
-## Migration Notes (v0.1 -> v0.2)
+## Migration Notes (v0.1 and v0.2 -> v0.3)
 
-1. No forced rewrite: v0.1 programs remain valid.
+1. No forced rewrite: v0.1 and v0.2 programs remain valid.
 2. For new documents, set:
 
 ```yaml
-language_version: "0.2"
+language_version: "0.3"
 ```
 
 3. Recommended incremental migration:
@@ -1184,11 +1222,12 @@ language_version: "0.2"
 
 ## Known Runtime Boundaries
 
-v0.2 intentionally separates declarative language shape from runtime execution maturity.
+v0.3 still separates declarative language shape from runtime execution maturity.
 
 Implemented runtime behavior:
 
-- Parse/validate/compile for all v0.2 fields in this guide.
+- Parse/validate/compile for all v0.3 fields in this guide.
+- Top-level `sequence` normalization into canonical `day` / `schedule`.
 - Materialize executable progression (`increment`, `weekly_increment`) with completion results.
 
 Deferred runtime behavior (declarative now, executable later):

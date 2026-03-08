@@ -960,6 +960,181 @@ Row: 3x10 @RIR2
 
   {
     const result = validateAst({
+      language_version: "0.3",
+      metadata: {
+        id: "sequence-repeat",
+        name: "Sequence Repeat"
+      },
+      calendar: {
+        start_date: "2026-03-02",
+        end_date: "2026-03-16"
+      },
+      sessions: [
+        {
+          id: "day3",
+          name: "Day 3",
+          exercises: [
+            {
+              exercise: "Deadlift",
+              sets: ["3x5 @75%"]
+            }
+          ]
+        },
+        {
+          id: "day1",
+          name: "Day 1",
+          exercises: [
+            {
+              exercise: "Bench Press",
+              sets: ["3x5 @75%"]
+            }
+          ]
+        },
+        {
+          id: "day2",
+          name: "Day 2",
+          exercises: [
+            {
+              exercise: "Row",
+              sets: ["3x5 @75%"]
+            }
+          ]
+        }
+      ],
+      sequence: {
+        repeat: true,
+        items: [
+          { session_id: "day1", rest_after_days: 1 },
+          { session_id: "day2", rest_after_days: 1 },
+          { session_id: "day3", rest_after_days: 2 }
+        ]
+      }
+    });
+
+    assert.equal(result.valid, true);
+    assert.ok(result.value);
+    assert.deepStrictEqual(
+      result.value.sessions.map((session) => session.id),
+      ["day1", "day2", "day3"]
+    );
+    assert.deepStrictEqual(
+      result.value.sessions.map((session) => session.schedule),
+      [
+        { type: "interval_days", every: 7 },
+        { type: "interval_days", every: 7, start_offset_days: 2 },
+        { type: "interval_days", every: 7, start_offset_days: 4 }
+      ]
+    );
+  }
+
+  {
+    const result = validateAst({
+      language_version: "0.3",
+      metadata: {
+        id: "sequence-once",
+        name: "Sequence Once"
+      },
+      sessions: [
+        {
+          id: "day1",
+          name: "Day 1",
+          exercises: [
+            {
+              exercise: "Bench Press",
+              sets: ["3x5 @75%"]
+            }
+          ]
+        },
+        {
+          id: "day2",
+          name: "Day 2",
+          exercises: [
+            {
+              exercise: "Row",
+              sets: ["3x5 @75%"]
+            }
+          ]
+        },
+        {
+          id: "day3",
+          name: "Day 3",
+          exercises: [
+            {
+              exercise: "Deadlift",
+              sets: ["3x5 @75%"]
+            }
+          ]
+        }
+      ],
+      sequence: {
+        repeat: false,
+        items: [
+          { session_id: "day1", rest_after_days: 1 },
+          { session_id: "day2", rest_after_days: 1 },
+          { session_id: "day3", rest_after_days: 2 }
+        ]
+      }
+    });
+
+    assert.equal(result.valid, true);
+    assert.ok(result.value);
+    assert.deepStrictEqual(
+      result.value.sessions.map((session) => ({ id: session.id, day: session.day, schedule: session.schedule })),
+      [
+        { id: "day1", day: 1, schedule: undefined },
+        { id: "day2", day: 3, schedule: undefined },
+        { id: "day3", day: 5, schedule: undefined }
+      ]
+    );
+  }
+
+  {
+    const result = validateAst({
+      language_version: "0.3",
+      metadata: {
+        id: "sequence-invalid",
+        name: "Sequence Invalid"
+      },
+      calendar: {
+        start_date: "2026-03-02",
+        end_date: "2026-03-16"
+      },
+      sessions: [
+        {
+          id: "day1",
+          name: "Day 1",
+          day: 1,
+          exercises: [
+            {
+              exercise: "Bench Press",
+              sets: ["3x5 @75%"]
+            }
+          ]
+        },
+        {
+          id: "day2",
+          name: "Day 2",
+          exercises: [
+            {
+              exercise: "Row",
+              sets: ["3x5 @75%"]
+            }
+          ]
+        }
+      ],
+      sequence: {
+        repeat: true,
+        items: [{ session_id: "day1", rest_after_days: 1 }]
+      }
+    });
+
+    assert.equal(result.valid, false);
+    assert.ok(result.diagnostics.some((diagnostic) => diagnostic.path === "$.sessions[0].day"));
+    assert.ok(result.diagnostics.some((diagnostic) => diagnostic.path === "$.sessions[1].id"));
+  }
+
+  {
+    const result = validateAst({
       language_version: "0.1",
       metadata: {
         id: "progression-missing-calendar",

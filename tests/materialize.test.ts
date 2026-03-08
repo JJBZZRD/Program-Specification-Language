@@ -111,4 +111,63 @@ export async function run(): Promise<void> {
     assert.equal(sessions3[0]?.slot, "AM");
     assert.equal(sessions3[1]?.slot, "PM");
   }
+
+  {
+    const validation4 = validateAst({
+      language_version: "0.3",
+      metadata: { id: "sequence-materialize", name: "Sequence Materialize" },
+      calendar: {
+        start_date: "2026-03-02",
+        end_date: "2026-03-16"
+      },
+      sessions: [
+        {
+          id: "day1",
+          name: "Day 1",
+          exercises: [{ exercise: "Bench Press", sets: ["3x5 @75%"] }]
+        },
+        {
+          id: "day2",
+          name: "Day 2",
+          exercises: [{ exercise: "Row", sets: ["3x5 @75%"] }]
+        },
+        {
+          id: "day3",
+          name: "Day 3",
+          exercises: [{ exercise: "Deadlift", sets: ["3x5 @75%"] }]
+        }
+      ],
+      sequence: {
+        repeat: true,
+        items: [
+          { session_id: "day1", rest_after_days: 1 },
+          { session_id: "day2", rest_after_days: 1 },
+          { session_id: "day3", rest_after_days: 2 }
+        ]
+      }
+    });
+
+    assert.equal(validation4.valid, true);
+    assert.ok(validation4.value);
+
+    const compiled4 = compileProgram(validation4.value);
+    const sessions4 = materialize(compiled4);
+
+    assert.deepStrictEqual(
+      sessions4.map((session) => ({
+        id: session.id,
+        date_iso: session.date_iso,
+        occurrence: session.occurrence
+      })),
+      [
+        { id: "day1", date_iso: "2026-03-02", occurrence: 1 },
+        { id: "day2", date_iso: "2026-03-04", occurrence: 1 },
+        { id: "day3", date_iso: "2026-03-06", occurrence: 1 },
+        { id: "day1", date_iso: "2026-03-09", occurrence: 2 },
+        { id: "day2", date_iso: "2026-03-11", occurrence: 2 },
+        { id: "day3", date_iso: "2026-03-13", occurrence: 2 },
+        { id: "day1", date_iso: "2026-03-16", occurrence: 3 }
+      ]
+    );
+  }
 }

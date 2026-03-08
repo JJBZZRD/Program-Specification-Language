@@ -1,4 +1,4 @@
-export type LanguageVersion = "0.1" | "0.2";
+export type LanguageVersion = "0.1" | "0.2" | "0.3";
 
 export type IsoDate = string;
 

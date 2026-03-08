@@ -1,19 +1,21 @@
-# Semantic Validation Rules (v0.2)
+# Semantic Validation Rules (v0.3)
 
-PSL v0.2 is backward-compatible with v0.1 source documents and adds richer authoring semantics.
+PSL v0.3 is backward-compatible with v0.1 and v0.2 source documents and adds sequence-based authoring sugar for flat session programs.
 
 ## Structural
 
-1. `language_version` must be `0.1` or `0.2`.
+1. `language_version` must be `0.1`, `0.2`, or `0.3`.
 2. `metadata.id` and `metadata.name` are required and non-empty.
 3. Program must include exactly one of `sessions` or `blocks`.
 4. Every session must include at least one exercise.
 5. Every exercise must include at least one set prescription.
 6. Session ids must be unique after block expansion (`<block_id>.<session_id>`).
+7. Top-level `sequence` is allowed only with flat `sessions` programs and `language_version: "0.3"`.
+8. When top-level `sequence` is used, sessions must omit `day`/`schedule` and each session id must appear exactly once in `sequence.items`.
 
 ## Shorthand + Source Mapping
 
-v0.2 keeps v0.1 shorthand and adds time and constraint clauses.
+v0.3 keeps v0.2 authoring surfaces and adds top-level ordered session sequencing.
 
 - New set shorthand families: `AMRAP`, `EMOM`, `density`, `for time`.
 - Tail clauses: `role`, `cap@`, `stop if ...`, `up to N sets until ...`, `rest_before`, `rest_after`.
@@ -123,7 +125,7 @@ Rules:
 5. `scope` (if provided) must be `set | exercise | session`.
 6. Inline progression shorthand must follow a set shorthand in the same block; duplicate inline progression on one set is invalid.
 
-### Declarative-only progression (v0.2 shape, v0.3 runtime)
+### Declarative-only progression (shape accepted, runtime deferred)
 
 - `auto_adjust`
 - criteria aggregation: `all_sets | any_set | last_set | total_reps | avg_rpe | min_load`
@@ -164,10 +166,13 @@ Rules:
 2. Block sessions are expanded with id namespacing and offset-bounded schedules.
 3. If calendar is present with blocks, computed end-date must match explicit `calendar.end_date` when provided.
 4. Repeating schedules require bounded horizon via `calendar.end_date` or per-schedule `end_offset_days`.
+5. Top-level `sequence.repeat: true` normalizes to per-session `interval_days` schedules using the total cycle length and cumulative `start_offset_days`.
+6. Top-level `sequence.repeat: false` normalizes to per-session fixed `day` values using the ordered cumulative offsets.
+7. `rest_after_days` counts rest days between consecutive sequence items, so the next session starts `rest_after_days + 1` calendar days later.
 
 ## Diagnostics
 
 - Errors are blocking.
 - Warnings are non-blocking.
 - Each diagnostic includes `path`, `severity`, and `message`.
-- v0.2 improves shorthand error localization with line annotations for block parsing.
+- Shorthand diagnostics include line annotations for multiline block parsing.
